@@ -7,14 +7,29 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 import random
 from flask import Flask
+import subprocess
+import threading
 
 app = Flask(__name__)
 
-# ==================== CONFIGURATION FROM ENVIRONMENT ====================
+# ==================== CONFIGURATION ====================
+# Use INTERNAL WAHA (running in same container)
 WAHA_URL = os.getenv("WAHA_URL", "http://localhost:3000")
 DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL", "120363422574401710@newsletter")
 SOURCE_CHANNELS = os.getenv("SOURCE_CHANNELS", "120363177070916101@newsletter,120363179368338362@newsletter,120363180244702234@newsletter,120363290169377613@newsletter,120363161802971651@newsletter").split(",")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "lootfastdeals-21")
+
+# ==================== WAHA SERVER MANAGEMENT ====================
+def start_waha_server():
+    """Start WAHA WhatsApp server in background"""
+    print("🚀 Starting WAHA Server...")
+    try:
+        # WAHA is already downloaded in Dockerfile, just start it
+        subprocess.Popen(["./waha"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("✅ WAHA Server started on port 3000")
+        print("💡 Access WAHA dashboard at: your-service.onrender.com/web")
+    except Exception as e:
+        print(f"❌ WAHA Error: {e}")
 
 # ==================== ENHANCED HASHTAG SYSTEM ====================
 ALL_HASHTAGS = [
@@ -580,6 +595,7 @@ def home():
     return """
     <h1>✅ WhatsApp Deal Forwarder Running 24/7!</h1>
     <p><strong>Status:</strong> Monitoring 5 channels for deals</p>
+    <p><strong>WAHA Dashboard:</strong> <a href="/web" target="_blank">Click here for QR Code</a></p>
     <p><strong>Forwarded Today:</strong> {}/{} messages</p>
     <p><strong>Total Forwarded:</strong> {}</p>
     <p><strong>Health:</strong> <a href="/health">/health</a></p>
@@ -599,16 +615,36 @@ def health():
         "uptime": str(stats.get_duration())
     }
 
+@app.route('/web')
+def waha_dashboard():
+    """Proxy to WAHA dashboard"""
+    try:
+        response = requests.get(f"{WAHA_URL}/web", timeout=5)
+        return response.text
+    except:
+        return """
+        <h2>⏳ WAHA Dashboard Starting...</h2>
+        <p>Please wait 1-2 minutes for WAHA to fully start.</p>
+        <p>Refresh this page to see the QR code for WhatsApp connection.</p>
+        """
+
 @app.route('/ping')
 def ping():
     """Keep-alive endpoint to prevent Render sleep"""
     return {"status": "pong", "timestamp": datetime.now().isoformat()}
 
+# Start WAHA server and forwarder
+print("🎯 Starting 24/7 Deal Forwarder on Render Cloud...")
+print("📍 WAHA_URL: http://localhost:3000 (INTERNAL in same container)")
+print("💡 Remember: Scan QR once at your-service.onrender.com/web")
+print("=" * 60)
+
+# Start WAHA server
+start_waha_server()
+
 # Start the forwarder in background thread
-import threading
 forwarder_thread = threading.Thread(target=deal_forwarder_main, daemon=True)
 forwarder_thread.start()
 
 if __name__ == '__main__':
-    print("🚀 Starting WhatsApp Deal Forwarder on Render...")
     app.run(host='0.0.0.0', port=5000, debug=False)
