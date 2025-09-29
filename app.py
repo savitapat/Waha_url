@@ -12,7 +12,7 @@ import random
 app = Flask(__name__)
 
 # ==================== USE PUBLIC WAHA INSTANCE ====================
-WAHA_URL = "https://waha-1-v384.onrender.com"  # Working public WAHA
+WAHA_URL = "https://waha-2-0.onrender.com"  # Working public WAHA
 DESTINATION_CHANNEL = "120363422574401710@newsletter"
 
 SOURCE_CHANNELS = [
