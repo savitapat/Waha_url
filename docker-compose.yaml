@@ -1,9 +1,9 @@
 version: '3.8'
 services:
   waha:
-    image: devlikeapro/waha:latest
+    image: devlikeapro/waha:latest  # ✅ CORRECT IMAGE
     ports:
-      - "3000:3000"
+      - "3000:3000"  # ✅ CORRECT PORT
     environment:
       - LOG_LEVEL=info
     restart: unless-stopped
