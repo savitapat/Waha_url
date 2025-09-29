@@ -1,9 +1,9 @@
 version: '3.8'
 services:
   waha:
-    image: devlikeapro/waha:latest  # ✅ FIXED: was "deviltesgp"
+    image: devlikeapro/waha:latest  # ✅ CORRECT
     ports:
-      - "3000:3000"  # ✅ FIXED: was 2000
+      - "3000:3000"  # ✅ CORRECT
     environment:
-      - LOG_LEVEL=info
+      - LOG_LEVEL=info  # ✅ CORRECT
     restart: unless-stopped
