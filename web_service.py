@@ -13,23 +13,45 @@ import threading
 app = Flask(__name__)
 
 # ==================== CONFIGURATION ====================
-# Use INTERNAL WAHA (running in same container)
+# Try multiple WAHA options
 WAHA_URL = os.getenv("WAHA_URL", "http://localhost:3000")
 DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL", "120363422574401710@newsletter")
 SOURCE_CHANNELS = os.getenv("SOURCE_CHANNELS", "120363177070916101@newsletter,120363179368338362@newsletter,120363180244702234@newsletter,120363290169377613@newsletter,120363161802971651@newsletter").split(",")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "lootfastdeals-21")
 
-# ==================== WAHA SERVER MANAGEMENT ====================
-def start_waha_server():
-    """Start WAHA WhatsApp server in background"""
-    print("🚀 Starting WAHA Server...")
+# ==================== ALTERNATIVE WAHA SOLUTIONS ====================
+ALTERNATIVE_WAHA_URLS = [
+    "https://waha-1-v384.onrender.com",
+    "https://waha-2-0.onrender.com", 
+    "https://waha.onrender.com"
+]
+
+current_waha_index = 0
+
+def get_best_waha_url():
+    """Find a working WAHA instance"""
+    global current_waha_index
+    
+    # First try local WAHA
+    if check_waha_health(WAHA_URL):
+        return WAHA_URL
+    
+    # Try alternative public instances
+    for i, url in enumerate(ALTERNATIVE_WAHA_URLS):
+        if check_waha_health(url):
+            current_waha_index = i
+            return url
+    
+    # Fallback to first alternative
+    return ALTERNATIVE_WAHA_URLS[0]
+
+def check_waha_health(url):
+    """Check if WAHA instance is healthy"""
     try:
-        # WAHA is already downloaded in Dockerfile, just start it
-        subprocess.Popen(["./waha"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("✅ WAHA Server started on port 3000")
-        print("💡 Access WAHA dashboard at: your-service.onrender.com/web")
-    except Exception as e:
-        print(f"❌ WAHA Error: {e}")
+        response = requests.get(f"{url}/api/sessions", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
 # ==================== ENHANCED HASHTAG SYSTEM ====================
 ALL_HASHTAGS = [
@@ -138,141 +160,31 @@ class Stats:
 
 stats = Stats()
 
-# ==================== SAFETY FUNCTIONS ====================
+# ==================== CORE FORWARDER FUNCTIONS ====================
 def check_daily_limits():
     global daily_message_count, hourly_message_count, daily_reset_time, hourly_reset_time
     
     if time.time() - daily_reset_time > 86400:
         daily_message_count = 0
         daily_reset_time = time.time()
-        print("🔄 Daily counter reset!")
     
     if time.time() - hourly_reset_time > 3600:
         hourly_message_count = 0
         hourly_reset_time = time.time()
-        print("🕐 Hourly counter reset!")
     
     if daily_message_count >= MAX_DAILY_MESSAGES:
-        print(f"🛑 DAILY LIMIT REACHED! ({MAX_DAILY_MESSAGES}/day)")
         return False
     
     if hourly_message_count >= MAX_HOURLY_MESSAGES:
-        print(f"⏳ HOURLY LIMIT REACHED! ({MAX_HOURLY_MESSAGES}/hour)")
-        print("   Sleeping for 15 minutes...")
         time.sleep(900)
         hourly_message_count = 0
         return True
     
     return True
 
-def get_safe_send_delay():
-    base_delay = MIN_TIME_BETWEEN_SENDS
-    if hourly_message_count > 30:
-        base_delay += 2
-    random_variation = random.uniform(1, 3)
-    return base_delay + random_variation
-
-def simulate_human_behavior():
-    pause_chance = 0.2 if hourly_message_count > 20 else 0.3
-    if random.random() < pause_chance:
-        time.sleep(random.uniform(0.5, 1.5))
-
-# ==================== SESSION MANAGEMENT ====================
-SESSION_FILE = "forwarder_session.json"
-SAFETY_FILE = "safety_tracker.json"
-
-def save_safety_data():
-    try:
-        import json
-        safety_data = {
-            'daily_message_count': daily_message_count,
-            'hourly_message_count': hourly_message_count,
-            'daily_reset_time': daily_reset_time,
-            'hourly_reset_time': hourly_reset_time,
-            'last_save': datetime.now().isoformat()
-        }
-        with open(SAFETY_FILE, 'w') as f:
-            json.dump(safety_data, f)
-    except:
-        pass
-
-def load_safety_data():
-    global daily_message_count, hourly_message_count, daily_reset_time, hourly_reset_time
-    try:
-        import json
-        if os.path.exists(SAFETY_FILE):
-            with open(SAFETY_FILE, 'r') as f:
-                safety_data = json.load(f)
-            
-            daily_message_count = safety_data.get('daily_message_count', 0)
-            hourly_message_count = safety_data.get('hourly_message_count', 0)
-            daily_reset_time = safety_data.get('daily_reset_time', time.time())
-            hourly_reset_time = safety_data.get('hourly_reset_time', time.time())
-            
-            current_time = time.time()
-            if current_time - daily_reset_time > 86400:
-                daily_message_count = 0
-                daily_reset_time = current_time
-            
-            if current_time - hourly_reset_time > 3600:
-                hourly_message_count = 0
-                hourly_reset_time = current_time
-                
-    except:
-        pass
-
-def save_session():
-    try:
-        import json
-        session_data = {
-            'last_processed_timestamps': last_processed_timestamps,
-            'seen_hashes': list(seen_hashes),
-            'seen_asins': list(seen_asins),
-            'seen_product_ids': list(seen_product_ids),
-            'save_time': datetime.now().isoformat()
-        }
-        with open(SESSION_FILE, 'w') as f:
-            json.dump(session_data, f)
-    except:
-        pass
-
-def load_session():
-    global last_processed_timestamps, seen_hashes, seen_asins, seen_product_ids
-    try:
-        import json
-        if os.path.exists(SESSION_FILE):
-            with open(SESSION_FILE, 'r') as f:
-                session_data = json.load(f)
-            
-            last_processed_timestamps = session_data.get('last_processed_timestamps', {})
-            seen_hashes = set(session_data.get('seen_hashes', []))
-            seen_asins = set(session_data.get('seen_asins', []))
-            seen_product_ids = set(session_data.get('seen_product_ids', []))
-            
-            for channel_id in last_processed_timestamps:
-                last_processed_timestamps[channel_id] = float(last_processed_timestamps[channel_id])
-            
-            print("✅ Loaded previous session")
-            return True
-    except:
-        pass
-    
-    return False
-
-def initialize_fresh_start():
-    global last_processed_timestamps
-    print("🆕 Starting FRESH - will only process NEW messages")
-    current_time = time.time()
-    for channel_id in SOURCE_CHANNELS:
-        last_processed_timestamps[channel_id] = current_time
-
-# ==================== WAHA FUNCTIONS ====================
 def get_waha_health():
-    try:
-        response = requests.get(f"{WAHA_URL}/api/sessions", timeout=10)
-        return response.status_code == 200
-    except:
-        return False
+    current_url = get_best_waha_url()
+    return check_waha_health(current_url)
 
 def send_whatsapp_message_optimized(text):
     global last_send_time, daily_message_count, hourly_message_count
@@ -285,25 +197,22 @@ def send_whatsapp_message_optimized(text):
     
     current_time = time.time()
     time_since_last_send = current_time - last_send_time
-    safe_delay = get_safe_send_delay()
     
-    if time_since_last_send < safe_delay:
-        wait_time = safe_delay - time_since_last_send
-        print(f"    ⏳ Safety delay: {wait_time:.1f}s")
+    if time_since_last_send < MIN_TIME_BETWEEN_SENDS:
+        wait_time = MIN_TIME_BETWEEN_SENDS - time_since_last_send
         time.sleep(wait_time)
     
-    simulate_human_behavior()
-    
+    current_waha_url = get_best_waha_url()
     payload = {"chatId": DESTINATION_CHANNEL, "text": text, "session": "default"}
+    
     try: 
-        response = requests.post(f"{WAHA_URL}/api/sendText", json=payload, timeout=15)
+        response = requests.post(f"{current_waha_url}/api/sendText", json=payload, timeout=15)
         
         if response.status_code == 200:
             last_send_time = time.time()
             daily_message_count += 1
             hourly_message_count += 1
-            print(f"    📊 Today: {daily_message_count}/{MAX_DAILY_MESSAGES}")
-            print(f"    🕐 This hour: {hourly_message_count}/{MAX_HOURLY_MESSAGES}")
+            print(f"    📊 Sent via {current_waha_url}: {daily_message_count}/{MAX_DAILY_MESSAGES}")
             return True
         else:
             print(f"    ❌ Send failed: {response.status_code}")
@@ -313,9 +222,10 @@ def send_whatsapp_message_optimized(text):
         return False
 
 def get_channel_messages(channel_id, limit=MESSAGE_LIMIT):
+    current_waha_url = get_best_waha_url()
     try:
         response = requests.get(
-            f"{WAHA_URL}/api/default/chats/{channel_id}/messages", 
+            f"{current_waha_url}/api/default/chats/{channel_id}/messages", 
             params={"limit": limit}, 
             timeout=10
         )
@@ -323,108 +233,35 @@ def get_channel_messages(channel_id, limit=MESSAGE_LIMIT):
     except: 
         return []
 
-# ==================== TEXT PROCESSING FUNCTIONS ====================
-def extract_amazon_asin(url):
-    patterns = [
-        r'/dp/([A-Z0-9]{10})',
-        r'/gp/product/([A-Z0-9]{10})',
-        r'amzn\.to/[a-zA-Z0-9]+',
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url, re.IGNORECASE)
-        if match: 
-            return match.group(1).upper() if pattern != r'amzn\.to/[a-zA-Z0-9]+' else "AMAZON_SHORT"
-    return None
-
-def extract_flipkart_product_id(url):
-    patterns = [r'/p/([a-zA-Z0-9]+)', r'pid=([a-zA-Z0-9]+)', r'fkrt\.co/([a-zA-Z0-9]+)']
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match: 
-            return match.group(1)
-    return None
-
-def clean_url_function(url):
-    if not url: return url
-    try:
-        parsed = urlparse(url)
-        if 'amazon.' in parsed.netloc.lower() or 'amzn.to' in url.lower():
-            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        
-        query_params = parse_qs(parsed.query)
-        tracking_params = ['utm_source', 'utm_medium', 'ref', 'tag', 'cmpid']
-        for param in tracking_params:
-            query_params.pop(param, None)
-        
-        clean_query = '&'.join([f"{k}={v[0]}" for k, v in query_params.items()])
-        cleaned_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        if clean_query: cleaned_url += f"?{clean_query}"
-        return cleaned_url
-    except: return url
-
-def apply_amazon_affiliate(url):
-    if not url or ('amazon.' not in url.lower() and 'amzn.to' not in url.lower()): 
-        return url
-    cleaned_url = clean_url_function(url)
-    return f"{cleaned_url}{'&' if '?' in cleaned_url else '?'}tag={AMAZON_AFFILIATE_TAG}"
-
-def is_safe_url(url):
-    safe_domains = ['amazon.in', 'amzn.to', 'flipkart.com', 'fkrt.co', 'myntra.com', 'ajio.com']
-    try: 
-        return any(safe_domain in urlparse(url).netloc.lower() for safe_domain in safe_domains)
-    except: 
-        return False
-
-def generate_message_hash(text): 
-    return hashlib.md5(text.encode()).hexdigest()
-
-def extract_platform(url):
-    if 'amazon' in url or 'amzn.to' in url: return "🛍️ Amazon"
-    elif 'flipkart' in url or 'fkrt.co' in url: return "📦 Flipkart"
-    elif 'myntra' in url: return "👕 Myntra"
-    elif 'ajio' in url: return "🛒 Ajio"
-    else: return "🔗 Other"
-
-def extract_price_fast(text):
-    price_match = re.search(r'@\s*(\d+,?\d*)|₹\s*(\d+,?\d*)', text)
-    if price_match:
-        price = price_match.group(1) or price_match.group(2)
-        return f"💰 ₹{price}"
-    return None
-
-def extract_discount_fast(text):
-    discount_match = re.search(r'(\d+%)', text)
-    if discount_match:
-        return f"🎯 {discount_match.group(1)}"
-    return None
-
 def process_message_ultra_fast(text):
     if not text: return None
     
-    text = re.sub(r'From\s*\*\s*[^:]*:|### From.*', '', text)
+    text = re.sub(r'From\s*\*\s*[^:]*:', '', text)
     
     urls = re.findall(r'https?://[^\s]+', text)
     if not urls: return None
     
-    safe_urls = [url for url in urls if is_safe_url(url)]
-    if not safe_urls: return None
+    main_url = urls[0]
     
-    main_url = safe_urls[0]
-    
+    # Simple platform detection
     if 'amazon' in main_url or 'amzn.to' in main_url:
-        final_url = apply_amazon_affiliate(main_url)
+        platform = "🛍️ Amazon"
+        final_url = f"{main_url}{'&' if '?' in main_url else '?'}tag={AMAZON_AFFILIATE_TAG}"
     else:
-        final_url = clean_url_function(main_url)
-    
-    platform = extract_platform(main_url)
+        platform = "📦 Other"
+        final_url = main_url
     
     clean_text = re.sub(r'https?://[^\s]+', '', text)
     lines = [line.strip() for line in clean_text.split('\n') if line.strip() and len(line) > 8]
     product_name = lines[0] if lines else "Hot Deal! 🔥"
     
-    price_info = extract_price_fast(text)
-    discount_info = extract_discount_fast(text)
+    # Extract price
+    price_match = re.search(r'@\s*(\d+,?\d*)|₹\s*(\d+,?\d*)', text)
+    price_info = f"💰 ₹{price_match.group(1)}" if price_match else ""
+    
+    # Extract discount
+    discount_match = re.search(r'(\d+%)', text)
+    discount_info = f"🎯 {discount_match.group(1)}" if discount_match else ""
     
     message_parts = [platform, f"\n{product_name}"]
     if price_info:
@@ -439,6 +276,9 @@ def process_message_ultra_fast(text):
     
     return ''.join(message_parts)
 
+def generate_message_hash(text): 
+    return hashlib.md5(text.encode()).hexdigest()
+
 def is_duplicate(message):
     if not message: return True
     message_hash = generate_message_hash(message)
@@ -450,7 +290,6 @@ def add_to_dedup(message):
     message_hash = generate_message_hash(message)
     seen_hashes.add(message_hash)
 
-# ==================== MAIN PROCESSING ====================
 def process_channel_real_time(channel_name, channel_id):
     deals_found = 0
     try:
@@ -491,74 +330,39 @@ def process_channel_real_time(channel_name, channel_id):
     
     return deals_found
 
-def print_safety_status():
-    daily_remaining = MAX_DAILY_MESSAGES - daily_message_count
-    hourly_remaining = MAX_HOURLY_MESSAGES - hourly_message_count
-    time_until_daily_reset = 86400 - (time.time() - daily_reset_time)
-    time_until_hourly_reset = 3600 - (time.time() - hourly_reset_time)
-    
-    hours_until_daily = time_until_daily_reset / 3600
-    minutes_until_hourly = time_until_hourly_reset / 60
-    
-    print(f"🛡️  SAFETY STATUS:")
-    print(f"   📨 Today: {daily_message_count}/{MAX_DAILY_MESSAGES} ({daily_remaining} remaining)")
-    print(f"   🕐 This hour: {hourly_message_count}/{MAX_HOURLY_MESSAGES} ({hourly_remaining} remaining)")
-    print(f"   🔄 Daily reset: {hours_until_daily:.1f}h | Hourly reset: {minutes_until_hourly:.0f}m")
-
 def deal_forwarder_main():
     """MAIN DEAL FORWARDER LOOP"""
     channel_names = ["TechFactsDeals", "Loots4u", "Shopping Loot Offers", "Loot Deals Official", "Loot Bazaar"]
     
-    print("🚀 ENHANCED WhatsApp Forwarder - 24/7 Cloud Operation!")
+    print("🚀 SMART WhatsApp Forwarder - 24/7 Cloud Operation!")
     print("=" * 60)
     
-    load_safety_data()
+    # Initialize fresh start
+    current_time = time.time()
+    for channel_id in SOURCE_CHANNELS:
+        last_processed_timestamps[channel_id] = current_time
     
-    if not load_session():
-        initialize_fresh_start()
-    
-    print_safety_status()
+    print(f"🛡️  Daily limit: {MAX_DAILY_MESSAGES} messages")
     print(f"⚡ Check interval: {CHECK_INTERVAL} seconds")
-    print(f"🎯 Daily limit: {MAX_DAILY_MESSAGES} messages")
-    print(f"⏰ Extended timing: Until 1 AM (Early Access Deals)")
-    print(f"🏷️ Smart hashtags: 2-3 context-aware tags per post")
+    print("💡 Using smart WAHA URL selection")
     print("=" * 60)
-    
-    # Wait for WAHA to be ready
-    print("⏳ Waiting for WAHA server to start...")
-    for i in range(30):
-        if get_waha_health():
-            print("✅ WAHA connected successfully!")
-            break
-        print(f"   Waiting... ({i+1}/30)")
-        time.sleep(10)
-    else:
-        print("❌ WAHA failed to start - but forwarder will continue trying")
-    
-    import atexit
-    atexit.register(save_safety_data)
-    atexit.register(save_session)
     
     # MAIN LOOP
     while True:
         try:
             stats.increment_check()
             current_time = datetime.now().strftime("%H:%M:%S")
-            current_hour = datetime.now().hour
             
             print(f"\n🔄 CHECK #{stats.check_count} at {current_time}")
             print("-" * 40)
             
             if not get_waha_health():
-                print("⚠️ WAHA not responding, retrying...")
-                time.sleep(10)
+                print("⚠️ No WAHA instance available, retrying...")
+                time.sleep(30)
                 continue
             
-            if current_hour >= 1 and current_hour < 6:
-                print("💤 Late night hours (1AM-6AM) - Reduced activity")
-            
             if not check_daily_limits():
-                print("💤 Daily limit reached. Sleeping for 1 hour...")
+                print("💤 Daily limit reached. Sleeping...")
                 time.sleep(3600)
                 continue
             
@@ -567,17 +371,10 @@ def deal_forwarder_main():
             for name, channel_id in zip(channel_names, SOURCE_CHANNELS):
                 deals = process_channel_real_time(name, channel_id)
                 total_forwarded += deals
-                time.sleep(0.3)
-            
-            if stats.check_count % 10 == 0:
-                save_safety_data()
-                save_session()
-                
-            if stats.check_count % 5 == 0:
-                print_safety_status()
+                time.sleep(0.5)
             
             if total_forwarded > 0:
-                print(f"🎉 {total_forwarded} deals forwarded with smart hashtags!")
+                print(f"🎉 {total_forwarded} deals forwarded!")
             else:
                 print(f"👀 No new deals")
             
@@ -592,57 +389,40 @@ def deal_forwarder_main():
 # ==================== FLASK ROUTES ====================
 @app.route('/')
 def home():
-    return """
+    current_waha = get_best_waha_url()
+    return f"""
     <h1>✅ WhatsApp Deal Forwarder Running 24/7!</h1>
     <p><strong>Status:</strong> Monitoring 5 channels for deals</p>
-    <p><strong>WAHA Dashboard:</strong> <a href="/web" target="_blank">Click here for QR Code</a></p>
-    <p><strong>Forwarded Today:</strong> {}/{} messages</p>
-    <p><strong>Total Forwarded:</strong> {}</p>
+    <p><strong>Current WAHA:</strong> {current_waha}</p>
+    <p><strong>WAHA Dashboard:</strong> <a href="{current_waha}/web" target="_blank">Click here for QR Code</a></p>
+    <p><strong>Forwarded Today:</strong> {daily_message_count}/{MAX_DAILY_MESSAGES}</p>
+    <p><strong>Total Forwarded:</strong> {stats.total_forwarded}</p>
     <p><strong>Health:</strong> <a href="/health">/health</a></p>
     <hr>
-    <p><em>Running on Render cloud - No laptop needed! 📱</em></p>
-    """.format(daily_message_count, MAX_DAILY_MESSAGES, stats.total_forwarded)
+    <p><em>Smart WAHA selection - No laptop needed! 📱</em></p>
+    """
 
 @app.route('/health')
 def health():
+    current_waha = get_best_waha_url()
     waha_status = "✅ Connected" if get_waha_health() else "❌ Disconnected"
     return {
         "status": "running", 
         "service": "deal-forwarder",
-        "waha": waha_status,
+        "current_waha": current_waha,
+        "waha_status": waha_status,
         "forwarded_today": daily_message_count,
-        "total_forwarded": stats.total_forwarded,
-        "uptime": str(stats.get_duration())
+        "total_forwarded": stats.total_forwarded
     }
-
-@app.route('/web')
-def waha_dashboard():
-    """Proxy to WAHA dashboard"""
-    try:
-        response = requests.get(f"{WAHA_URL}/web", timeout=5)
-        return response.text
-    except:
-        return """
-        <h2>⏳ WAHA Dashboard Starting...</h2>
-        <p>Please wait 1-2 minutes for WAHA to fully start.</p>
-        <p>Refresh this page to see the QR code for WhatsApp connection.</p>
-        """
 
 @app.route('/ping')
 def ping():
-    """Keep-alive endpoint to prevent Render sleep"""
+    """Keep-alive endpoint"""
     return {"status": "pong", "timestamp": datetime.now().isoformat()}
 
-# Start WAHA server and forwarder
-print("🎯 Starting 24/7 Deal Forwarder on Render Cloud...")
-print("📍 WAHA_URL: http://localhost:3000 (INTERNAL in same container)")
-print("💡 Remember: Scan QR once at your-service.onrender.com/web")
-print("=" * 60)
-
-# Start WAHA server
-start_waha_server()
-
-# Start the forwarder in background thread
+# Start the forwarder
+print("🎯 Starting Smart WhatsApp Forwarder...")
+print("💡 Will automatically find working WAHA instance")
 forwarder_thread = threading.Thread(target=deal_forwarder_main, daemon=True)
 forwarder_thread.start()
 
