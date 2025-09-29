@@ -1,8 +1,7 @@
 from flask import Flask
-import subprocess
-import threading
 import requests
 import time
+import threading
 import os
 import re
 import hashlib
@@ -12,27 +11,8 @@ import random
 
 app = Flask(__name__)
 
-# ==================== WAHA SERVER STARTUP ====================
-def start_waha_server():
-    """Start WAHA WhatsApp server - RUNS ON RENDER, NOT YOUR LAPTOP"""
-    print("🚀 Starting WAHA Server on Render Cloud...")
-    try:
-        # Download WAHA if not exists
-        if not os.path.exists("waha"):
-            print("📥 Downloading WAHA...")
-            os.system("curl -L https://github.com/devlikeapro/waha/releases/latest/download/waha-linux -o waha")
-            os.system("chmod +x waha")
-        
-        # Start WAHA on port 3000 (INSIDE RENDER CONTAINER)
-        print("🟢 Starting WAHA on port 3000...")
-        subprocess.Popen(["./waha"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("✅ WAHA Server started on Render cloud - QR ready at /web")
-    except Exception as e:
-        print(f"❌ WAHA Error: {e}")
-
-# ==================== YOUR ENHANCED FORWARDER CODE ====================
-# ==================== CONFIGURATION ====================
-WAHA_URL = "http://localhost:3000"  # ← INTERNAL in Render container
+# ==================== USE PUBLIC WAHA INSTANCE ====================
+WAHA_URL = "https://waha-1-v384.onrender.com"  # Working public WAHA
 DESTINATION_CHANNEL = "120363422574401710@newsletter"
 
 SOURCE_CHANNELS = [
@@ -45,42 +25,30 @@ SOURCE_CHANNELS = [
 
 AMAZON_AFFILIATE_TAG = "lootfastdeals-21"
 
+print("🚀 Deal Forwarder Starting with Public WAHA...")
+print(f"📡 WAHA URL: {WAHA_URL}")
+print("💡 Scan QR at: https://waha-1-v384.onrender.com/web")
+print("=" * 60)
+
+# ==================== YOUR EXISTING FORWARDER CODE ====================
+# [PASTE ALL YOUR enhanced_forwarder.py CODE HERE EXCEPT:
+# - Remove the main_loop() function
+# - Remove the __main__ block at the end
+# - Keep all other functions and variables]
+
 # ==================== ENHANCED HASHTAG SYSTEM ====================
 ALL_HASHTAGS = [
-    # Platform Specific
-    "#AmazonDeals", "#AmazonIndia", "#AmazonSale", "#FlipkartDeals", 
-    "#FlipkartSale", "#MyntraDeals", "#AjioOffers", "#AjioLoot",
-    
-    # Generic Deal Hashtags
+    "#AmazonDeals", "#AmazonIndia", "#FlipkartDeals", "#MyntraDeals", "#AjioOffers",
     "#Deals", "#Offers", "#Discount", "#Sale", "#Loot", "#Savings",
-    "#SaveMoney", "#BudgetShopping", "#Affordable", "#CheapDeals",
-    
-    # Product Categories
-    "#Electronics", "#Fashion", "#HomeDecor", "#Kitchen", "#Beauty",
-    "#MobileDeals", "#LaptopDeals", "#FashionSale", "#TechDeals",
-    "#GadgetDeals", "#HomeAppliances", "#KitchenEssentials",
-    
-    # Urgency & Strategy
-    "#LimitedTime", "#FlashSale", "#TodayOnly", "#Hurry", "#QuickDeal",
-    "#HotDeal", "#SpecialOffer", "#ExclusiveDeal", "#LimitedStock",
-    
-    # Price Range
-    "#Under500", "#Under1000", "#BudgetFriendly", "#ValueDeal",
-    "#PremiumDeals", "#LuxuryDeals",
-    
-    # Time Based
-    "#MorningDeals", "#AfternoonDeals", "#EveningDeals", "#LateNightDeals",
-    "#NightOwlDeals", "#EarlyAccess", "#MidnightDeals",
-    
-    # Seasonal & Daily
-    "#DailyDeals", "#WeekendSale", "#TodayDeals", "#NewArrivals"
+    "#Electronics", "#Fashion", "#HomeDecor", "#TechDeals", "#FashionSale",
+    "#LimitedTime", "#FlashSale", "#Under500", "#Under1000", "#BudgetFriendly",
+    "#MorningDeals", "#EveningDeals", "#LateNightDeals", "#NightOwlDeals"
 ]
 
 def get_smart_hashtags(product_text, platform):
     """Get context-aware hashtags"""
     base_hashtags = []
     
-    # Platform-specific hashtags
     platform_lower = platform.lower()
     if "amazon" in platform_lower:
         base_hashtags.extend(["#AmazonDeals", "#AmazonIndia"])
@@ -91,7 +59,6 @@ def get_smart_hashtags(product_text, platform):
     elif "ajio" in platform_lower:
         base_hashtags.extend(["#AjioOffers", "#AjioLoot"])
     
-    # Time-based hashtags
     current_hour = datetime.now().hour
     if 6 <= current_hour < 12:
         base_hashtags.append("#MorningDeals")
@@ -99,12 +66,9 @@ def get_smart_hashtags(product_text, platform):
         base_hashtags.append("#AfternoonDeals")
     elif 17 <= current_hour < 22:
         base_hashtags.append("#EveningDeals")
-    elif 22 <= current_hour <= 23:
+    else:
         base_hashtags.extend(["#LateNightDeals", "#NightOwlDeals"])
-    else:  # 0-6 AM
-        base_hashtags.extend(["#MidnightDeals", "#EarlyAccess", "#NightOwlDeals"])
     
-    # Price-based hashtags
     price_match = re.search(r'₹(\d+,?\d+)', product_text)
     if price_match:
         price = int(price_match.group(1).replace(',', ''))
@@ -112,33 +76,11 @@ def get_smart_hashtags(product_text, platform):
             base_hashtags.append("#Under500")
         elif price < 1000:
             base_hashtags.append("#Under1000")
-        elif price < 2000:
-            base_hashtags.append("#BudgetFriendly")
-        else:
-            base_hashtags.append("#PremiumDeals")
     
-    # Category-based hashtags
-    text_lower = product_text.lower()
-    if any(word in text_lower for word in ['laptop', 'mobile', 'headphone', 'earphone', 'tablet', 'camera']):
-        base_hashtags.extend(["#TechDeals", "#Electronics"])
-    elif any(word in text_lower for word in ['shirt', 'dress', 'jeans', 'shoe', 'sandal', 'top', 'kurta']):
-        base_hashtags.extend(["#FashionDeals", "#ClothingSale"])
-    elif any(word in text_lower for word in ['kitchen', 'cooker', 'home', 'furniture', 'decor', 'appliance']):
-        base_hashtags.extend(["#HomeDecor", "#KitchenDeals"])
-    elif any(word in text_lower for word in ['beauty', 'cream', 'lotion', 'makeup', 'skincare']):
-        base_hashtags.append("#BeautyDeals")
-    
-    # Add 1-2 random generic hashtags (2-3 hashtags total)
-    generic_pool = [h for h in ALL_HASHTAGS if h not in base_hashtags]
-    num_generic = max(0, 3 - len(base_hashtags))  # Ensure 2-3 hashtags total
-    random_generic = random.sample(generic_pool, min(num_generic, len(generic_pool)))
-    
-    # Combine all (2-3 hashtags total)
-    all_selected = base_hashtags + random_generic
-    return ' '.join(all_selected[:3])  # Max 3 hashtags
+    return ' '.join(base_hashtags[:3])
 
 # ==================== OPTIMIZED DAILY LIMITS ====================
-CHECK_INTERVAL = 30  # Increased for server
+CHECK_INTERVAL = 30
 MIN_TIME_BETWEEN_SENDS = 8
 MAX_DAILY_MESSAGES = 400
 MAX_HOURLY_MESSAGES = 35
@@ -171,135 +113,28 @@ class Stats:
 
 stats = Stats()
 
-# ==================== SAFETY FUNCTIONS ====================
+# ==================== CORE FORWARDER FUNCTIONS ====================
 def check_daily_limits():
     global daily_message_count, hourly_message_count, daily_reset_time, hourly_reset_time
     
     if time.time() - daily_reset_time > 86400:
         daily_message_count = 0
         daily_reset_time = time.time()
-        print("🔄 Daily counter reset!")
     
     if time.time() - hourly_reset_time > 3600:
         hourly_message_count = 0
         hourly_reset_time = time.time()
-        print("🕐 Hourly counter reset!")
     
     if daily_message_count >= MAX_DAILY_MESSAGES:
-        print(f"🛑 DAILY LIMIT REACHED! ({MAX_DAILY_MESSAGES}/day)")
         return False
     
     if hourly_message_count >= MAX_HOURLY_MESSAGES:
-        print(f"⏳ HOURLY LIMIT REACHED! ({MAX_HOURLY_MESSAGES}/hour)")
-        print("   Sleeping for 15 minutes...")
         time.sleep(900)
         hourly_message_count = 0
         return True
     
     return True
 
-def get_safe_send_delay():
-    base_delay = MIN_TIME_BETWEEN_SENDS
-    if hourly_message_count > 30:
-        base_delay += 2
-    random_variation = random.uniform(1, 3)
-    return base_delay + random_variation
-
-def simulate_human_behavior():
-    pause_chance = 0.2 if hourly_message_count > 20 else 0.3
-    if random.random() < pause_chance:
-        time.sleep(random.uniform(0.5, 1.5))
-
-# ==================== SESSION MANAGEMENT ====================
-SESSION_FILE = "forwarder_session.json"
-SAFETY_FILE = "safety_tracker.json"
-
-def save_safety_data():
-    try:
-        import json
-        safety_data = {
-            'daily_message_count': daily_message_count,
-            'hourly_message_count': hourly_message_count,
-            'daily_reset_time': daily_reset_time,
-            'hourly_reset_time': hourly_reset_time,
-            'last_save': datetime.now().isoformat()
-        }
-        with open(SAFETY_FILE, 'w') as f:
-            json.dump(safety_data, f)
-    except:
-        pass
-
-def load_safety_data():
-    global daily_message_count, hourly_message_count, daily_reset_time, hourly_reset_time
-    try:
-        import json
-        if os.path.exists(SAFETY_FILE):
-            with open(SAFETY_FILE, 'r') as f:
-                safety_data = json.load(f)
-            
-            daily_message_count = safety_data.get('daily_message_count', 0)
-            hourly_message_count = safety_data.get('hourly_message_count', 0)
-            daily_reset_time = safety_data.get('daily_reset_time', time.time())
-            hourly_reset_time = safety_data.get('hourly_reset_time', time.time())
-            
-            current_time = time.time()
-            if current_time - daily_reset_time > 86400:
-                daily_message_count = 0
-                daily_reset_time = current_time
-            
-            if current_time - hourly_reset_time > 3600:
-                hourly_message_count = 0
-                hourly_reset_time = current_time
-                
-    except:
-        pass
-
-def save_session():
-    try:
-        import json
-        session_data = {
-            'last_processed_timestamps': last_processed_timestamps,
-            'seen_hashes': list(seen_hashes),
-            'seen_asins': list(seen_asins),
-            'seen_product_ids': list(seen_product_ids),
-            'save_time': datetime.now().isoformat()
-        }
-        with open(SESSION_FILE, 'w') as f:
-            json.dump(session_data, f)
-    except:
-        pass
-
-def load_session():
-    global last_processed_timestamps, seen_hashes, seen_asins, seen_product_ids
-    try:
-        import json
-        if os.path.exists(SESSION_FILE):
-            with open(SESSION_FILE, 'r') as f:
-                session_data = json.load(f)
-            
-            last_processed_timestamps = session_data.get('last_processed_timestamps', {})
-            seen_hashes = set(session_data.get('seen_hashes', []))
-            seen_asins = set(session_data.get('seen_asins', []))
-            seen_product_ids = set(session_data.get('seen_product_ids', []))
-            
-            for channel_id in last_processed_timestamps:
-                last_processed_timestamps[channel_id] = float(last_processed_timestamps[channel_id])
-            
-            print("✅ Loaded previous session")
-            return True
-    except:
-        pass
-    
-    return False
-
-def initialize_fresh_start():
-    global last_processed_timestamps
-    print("🆕 Starting FRESH - will only process NEW messages")
-    current_time = time.time()
-    for channel_id in SOURCE_CHANNELS:
-        last_processed_timestamps[channel_id] = current_time
-
-# ==================== WAHA FUNCTIONS ====================
 def get_waha_health():
     try:
         response = requests.get(f"{WAHA_URL}/api/sessions", timeout=10)
@@ -318,14 +153,10 @@ def send_whatsapp_message_optimized(text):
     
     current_time = time.time()
     time_since_last_send = current_time - last_send_time
-    safe_delay = get_safe_send_delay()
     
-    if time_since_last_send < safe_delay:
-        wait_time = safe_delay - time_since_last_send
-        print(f"    ⏳ Safety delay: {wait_time:.1f}s")
+    if time_since_last_send < MIN_TIME_BETWEEN_SENDS:
+        wait_time = MIN_TIME_BETWEEN_SENDS - time_since_last_send
         time.sleep(wait_time)
-    
-    simulate_human_behavior()
     
     payload = {"chatId": DESTINATION_CHANNEL, "text": text, "session": "default"}
     try: 
@@ -335,8 +166,7 @@ def send_whatsapp_message_optimized(text):
             last_send_time = time.time()
             daily_message_count += 1
             hourly_message_count += 1
-            print(f"    📊 Today: {daily_message_count}/{MAX_DAILY_MESSAGES}")
-            print(f"    🕐 This hour: {hourly_message_count}/{MAX_HOURLY_MESSAGES}")
+            print(f"    📊 Sent: {daily_message_count}/{MAX_DAILY_MESSAGES}")
             return True
         else:
             print(f"    ❌ Send failed: {response.status_code}")
@@ -356,108 +186,35 @@ def get_channel_messages(channel_id, limit=MESSAGE_LIMIT):
     except: 
         return []
 
-# ==================== TEXT PROCESSING FUNCTIONS ====================
-def extract_amazon_asin(url):
-    patterns = [
-        r'/dp/([A-Z0-9]{10})',
-        r'/gp/product/([A-Z0-9]{10})',
-        r'amzn\.to/[a-zA-Z0-9]+',
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url, re.IGNORECASE)
-        if match: 
-            return match.group(1).upper() if pattern != r'amzn\.to/[a-zA-Z0-9]+' else "AMAZON_SHORT"
-    return None
-
-def extract_flipkart_product_id(url):
-    patterns = [r'/p/([a-zA-Z0-9]+)', r'pid=([a-zA-Z0-9]+)', r'fkrt\.co/([a-zA-Z0-9]+)']
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match: 
-            return match.group(1)
-    return None
-
-def clean_url_function(url):
-    if not url: return url
-    try:
-        parsed = urlparse(url)
-        if 'amazon.' in parsed.netloc.lower() or 'amzn.to' in url.lower():
-            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        
-        query_params = parse_qs(parsed.query)
-        tracking_params = ['utm_source', 'utm_medium', 'ref', 'tag', 'cmpid']
-        for param in tracking_params:
-            query_params.pop(param, None)
-        
-        clean_query = '&'.join([f"{k}={v[0]}" for k, v in query_params.items()])
-        cleaned_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        if clean_query: cleaned_url += f"?{clean_query}"
-        return cleaned_url
-    except: return url
-
-def apply_amazon_affiliate(url):
-    if not url or ('amazon.' not in url.lower() and 'amzn.to' not in url.lower()): 
-        return url
-    cleaned_url = clean_url_function(url)
-    return f"{cleaned_url}{'&' if '?' in cleaned_url else '?'}tag={AMAZON_AFFILIATE_TAG}"
-
-def is_safe_url(url):
-    safe_domains = ['amazon.in', 'amzn.to', 'flipkart.com', 'fkrt.co', 'myntra.com', 'ajio.com']
-    try: 
-        return any(safe_domain in urlparse(url).netloc.lower() for safe_domain in safe_domains)
-    except: 
-        return False
-
-def generate_message_hash(text): 
-    return hashlib.md5(text.encode()).hexdigest()
-
-def extract_platform(url):
-    if 'amazon' in url or 'amzn.to' in url: return "🛍️ Amazon"
-    elif 'flipkart' in url or 'fkrt.co' in url: return "📦 Flipkart"
-    elif 'myntra' in url: return "👕 Myntra"
-    elif 'ajio' in url: return "🛒 Ajio"
-    else: return "🔗 Other"
-
-def extract_price_fast(text):
-    price_match = re.search(r'@\s*(\d+,?\d*)|₹\s*(\d+,?\d*)', text)
-    if price_match:
-        price = price_match.group(1) or price_match.group(2)
-        return f"💰 ₹{price}"
-    return None
-
-def extract_discount_fast(text):
-    discount_match = re.search(r'(\d+%)', text)
-    if discount_match:
-        return f"🎯 {discount_match.group(1)}"
-    return None
-
 def process_message_ultra_fast(text):
     if not text: return None
     
-    text = re.sub(r'From\s*\*\s*[^:]*:|### From.*', '', text)
+    text = re.sub(r'From\s*\*\s*[^:]*:', '', text)
     
     urls = re.findall(r'https?://[^\s]+', text)
     if not urls: return None
     
-    safe_urls = [url for url in urls if is_safe_url(url)]
-    if not safe_urls: return None
+    main_url = urls[0]
     
-    main_url = safe_urls[0]
-    
+    # Simple platform detection
     if 'amazon' in main_url or 'amzn.to' in main_url:
-        final_url = apply_amazon_affiliate(main_url)
+        platform = "🛍️ Amazon"
+        final_url = f"{main_url}{'&' if '?' in main_url else '?'}tag={AMAZON_AFFILIATE_TAG}"
     else:
-        final_url = clean_url_function(main_url)
-    
-    platform = extract_platform(main_url)
+        platform = "📦 Other"
+        final_url = main_url
     
     clean_text = re.sub(r'https?://[^\s]+', '', text)
     lines = [line.strip() for line in clean_text.split('\n') if line.strip() and len(line) > 8]
     product_name = lines[0] if lines else "Hot Deal! 🔥"
     
-    price_info = extract_price_fast(text)
-    discount_info = extract_discount_fast(text)
+    # Extract price
+    price_match = re.search(r'@\s*(\d+,?\d*)|₹\s*(\d+,?\d*)', text)
+    price_info = f"💰 ₹{price_match.group(1)}" if price_match else ""
+    
+    # Extract discount
+    discount_match = re.search(r'(\d+%)', text)
+    discount_info = f"🎯 {discount_match.group(1)}" if discount_match else ""
     
     message_parts = [platform, f"\n{product_name}"]
     if price_info:
@@ -467,11 +224,13 @@ def process_message_ultra_fast(text):
     
     message_parts.append(f"\n\n{final_url}")
     
-    # Use smart hashtags (2-3 hashtags)
     smart_hashtags = get_smart_hashtags(text, platform)
     message_parts.append(f"\n\n{smart_hashtags}")
     
     return ''.join(message_parts)
+
+def generate_message_hash(text): 
+    return hashlib.md5(text.encode()).hexdigest()
 
 def is_duplicate(message):
     if not message: return True
@@ -484,7 +243,6 @@ def add_to_dedup(message):
     message_hash = generate_message_hash(message)
     seen_hashes.add(message_hash)
 
-# ==================== MAIN PROCESSING ====================
 def process_channel_real_time(channel_name, channel_id):
     deals_found = 0
     try:
@@ -504,7 +262,6 @@ def process_channel_real_time(channel_name, channel_id):
             if message_timestamp > new_last_timestamp:
                 new_last_timestamp = message_timestamp
             
-            # Extended timing until 1 AM deals (5-minute window)
             if time.time() - message_timestamp > 300:
                 stats.increment_missed()
                 continue
@@ -526,77 +283,49 @@ def process_channel_real_time(channel_name, channel_id):
     
     return deals_found
 
-def print_safety_status():
-    daily_remaining = MAX_DAILY_MESSAGES - daily_message_count
-    hourly_remaining = MAX_HOURLY_MESSAGES - hourly_message_count
-    time_until_daily_reset = 86400 - (time.time() - daily_reset_time)
-    time_until_hourly_reset = 3600 - (time.time() - hourly_reset_time)
-    
-    hours_until_daily = time_until_daily_reset / 3600
-    minutes_until_hourly = time_until_hourly_reset / 60
-    
-    print(f"🛡️  SAFETY STATUS:")
-    print(f"   📨 Today: {daily_message_count}/{MAX_DAILY_MESSAGES} ({daily_remaining} remaining)")
-    print(f"   🕐 This hour: {hourly_message_count}/{MAX_HOURLY_MESSAGES} ({hourly_remaining} remaining)")
-    print(f"   🔄 Daily reset: {hours_until_daily:.1f}h | Hourly reset: {minutes_until_hourly:.0f}m")
-
 def deal_forwarder_main():
-    """MAIN DEAL FORWARDER LOOP - RUNS 24/7 ON RENDER"""
+    """MAIN DEAL FORWARDER LOOP"""
     channel_names = ["TechFactsDeals", "Loots4u", "Shopping Loot Offers", "Loot Deals Official", "Loot Bazaar"]
     
     print("🚀 ENHANCED WhatsApp Forwarder - 24/7 Cloud Operation!")
     print("=" * 60)
     
-    load_safety_data()
+    # Initialize fresh start
+    current_time = time.time()
+    for channel_id in SOURCE_CHANNELS:
+        last_processed_timestamps[channel_id] = current_time
     
-    if not load_session():
-        initialize_fresh_start()
-    
-    print_safety_status()
+    print(f"🛡️  Daily limit: {MAX_DAILY_MESSAGES} messages")
     print(f"⚡ Check interval: {CHECK_INTERVAL} seconds")
-    print(f"🎯 Daily limit: {MAX_DAILY_MESSAGES} messages")
-    print(f"⏰ Extended timing: Until 1 AM (Early Access Deals)")
-    print(f"🏷️ Smart hashtags: 2-3 context-aware tags per post")
     print("=" * 60)
     
     # Wait for WAHA to be ready
-    print("⏳ Waiting for WAHA server to start...")
-    for i in range(30):  # Wait up to 5 minutes
+    print("⏳ Waiting for WAHA connection...")
+    for i in range(20):
         if get_waha_health():
             print("✅ WAHA connected successfully!")
             break
-        print(f"   Waiting... ({i+1}/30)")
+        print(f"   Waiting... ({i+1}/20)")
         time.sleep(10)
     else:
-        print("❌ WAHA failed to start - but forwarder will continue trying")
+        print("⚠️ WAHA connection failed - but will continue trying")
     
-    import atexit
-    atexit.register(save_safety_data)
-    atexit.register(save_session)
-    
-    # MAIN LOOP - RUNS 24/7
+    # MAIN LOOP
     while True:
         try:
             stats.increment_check()
             current_time = datetime.now().strftime("%H:%M:%S")
-            current_hour = datetime.now().hour
             
             print(f"\n🔄 CHECK #{stats.check_count} at {current_time}")
             print("-" * 40)
             
-            # Check WAHA health
             if not get_waha_health():
                 print("⚠️ WAHA not responding, retrying...")
                 time.sleep(10)
                 continue
             
-            # Check if we should continue (until 1 AM)
-            if current_hour >= 1 and current_hour < 6:
-                print("💤 Late night hours (1AM-6AM) - Reduced activity")
-                # Still run but with awareness
-            
             if not check_daily_limits():
-                print("💤 Daily limit reached. Sleeping for 1 hour...")
+                print("💤 Daily limit reached. Sleeping...")
                 time.sleep(3600)
                 continue
             
@@ -605,17 +334,10 @@ def deal_forwarder_main():
             for name, channel_id in zip(channel_names, SOURCE_CHANNELS):
                 deals = process_channel_real_time(name, channel_id)
                 total_forwarded += deals
-                time.sleep(0.3)
-            
-            if stats.check_count % 10 == 0:
-                save_safety_data()
-                save_session()
-                
-            if stats.check_count % 5 == 0:
-                print_safety_status()
+                time.sleep(0.5)
             
             if total_forwarded > 0:
-                print(f"🎉 {total_forwarded} deals forwarded with smart hashtags!")
+                print(f"🎉 {total_forwarded} deals forwarded!")
             else:
                 print(f"👀 No new deals")
             
@@ -623,27 +345,20 @@ def deal_forwarder_main():
             print(f"⏳ Next check in {CHECK_INTERVAL} seconds...\n")
             time.sleep(CHECK_INTERVAL)
             
-        except KeyboardInterrupt:
-            print(f"\n🛑 Forwarder stopped safely")
-            print(f"📊 Final: {stats.total_forwarded} deals today")
-            save_safety_data()
-            save_session()
-            break
         except Exception as e:
             print(f"💥 Error: {str(e)}")
-            time.sleep(30)  # Shorter sleep on error
+            time.sleep(30)
 
 # ==================== FLASK ROUTES ====================
 @app.route('/')
 def home():
     return """
-    <h1>✅ WAHA + Deal Forwarder Running 24/7!</h1>
+    <h1>✅ Deal Forwarder Running 24/7!</h1>
     <p><strong>Status:</strong> Monitoring 5 channels for deals</p>
-    <p><strong>WAHA Dashboard:</strong> <a href="/web" target="_blank">Click here for QR Code</a></p>
+    <p><strong>WAHA Dashboard:</strong> <a href="https://waha-1-v384.onrender.com/web" target="_blank">Click here for QR Code</a></p>
     <p><strong>Health:</strong> <a href="/health">/health</a></p>
-    <p><strong>Stats:</strong> <a href="/stats">/stats</a></p>
     <hr>
-    <p><em>Running on Render cloud - No laptop needed! 📱</em></p>
+    <p><em>Using public WAHA instance - No laptop needed! 📱</em></p>
     """
 
 @app.route('/health')
@@ -653,49 +368,12 @@ def health():
         "status": "running", 
         "service": "deal-forwarder",
         "waha": waha_status,
-        "uptime": str(stats.get_duration()) if hasattr(stats, 'get_duration') else "0:00:00"
+        "forwarded": stats.total_forwarded,
+        "checks": stats.check_count
     }
 
-@app.route('/stats')
-def stats_page():
-    return {
-        "total_forwarded": stats.total_forwarded,
-        "check_count": stats.check_count,
-        "missed_deals": stats.missed_deals,
-        "daily_messages": daily_message_count,
-        "hourly_messages": hourly_message_count
-    }
-
-@app.route('/web')
-def waha_dashboard():
-    """Proxy to WAHA dashboard for QR code"""
-    try:
-        response = requests.get(f"{WAHA_URL}/web", timeout=5)
-        return response.text
-    except:
-        return """
-        <h2>⏳ WAHA Dashboard Starting...</h2>
-        <p>Please wait 1-2 minutes for WAHA to fully start.</p>
-        <p>Refresh this page to see the QR code for WhatsApp connection.</p>
-        """
-
-# ==================== START BOTH SERVICES ====================
-def start_services():
-    """Start both WAHA and Deal Forwarder"""
-    print("🎯 Starting 24/7 Deal Forwarder on Render Cloud...")
-    print("📍 WAHA_URL: http://localhost:3000 (INSIDE RENDER CONTAINER)")
-    print("💡 Remember: Scan QR once at your-service.onrender.com/web")
-    print("=" * 60)
-    
-    # Start WAHA server
-    threading.Thread(target=start_waha_server, daemon=True).start()
-    
-    # Start deal forwarder after short delay
-    time.sleep(5)
-    threading.Thread(target=deal_forwarder_main, daemon=True).start()
-
-# Start everything when app loads
-start_services()
+# Start the forwarder
+threading.Thread(target=deal_forwarder_main, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
