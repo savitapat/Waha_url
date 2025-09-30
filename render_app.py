@@ -17,14 +17,13 @@ WAHA_URL = os.getenv("WAHA_URL", "https://waha-production-32e7.up.railway.app")
 DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL", "120363422574401710@newsletter")
 SOURCE_CHANNELS = os.getenv("SOURCE_CHANNELS", "120363177070916101@newsletter,120363179368338362@newsletter,120363180244702234@newsletter,120363290169377613@newsletter,120363161802971651@newsletter").split(",")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "lootfastdeals-21")
-USE_EARNKARO = os.getenv("USE_EARNKARO", "false").lower() == "true"
 
-# ==================== SAFETY LIMITS ====================
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "30"))
-MIN_TIME_BETWEEN_SENDS = int(os.getenv("MIN_TIME_BETWEEN_SENDS", "8"))
-MAX_DAILY_MESSAGES = int(os.getenv("MAX_DAILY_MESSAGES", "400"))
-MAX_HOURLY_MESSAGES = int(os.getenv("MAX_HOURLY_MESSAGES", "35"))
-MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT", "6"))
+# ==================== OPTIMIZED SAFETY LIMITS ====================
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "25"))  # Faster checking
+MIN_TIME_BETWEEN_SENDS = int(os.getenv("MIN_TIME_BETWEEN_SENDS", "6"))  # Reduced delay
+MAX_DAILY_MESSAGES = int(os.getenv("MAX_DAILY_MESSAGES", "440"))  # Your setting
+MAX_HOURLY_MESSAGES = int(os.getenv("MAX_HOURLY_MESSAGES", "40"))  # Increased
+MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT", "12"))  # DOUBLE the messages checked!
 
 # ==================== ENHANCED ROTATING HASHTAGS ====================
 HASHTAG_CATEGORIES = {
@@ -33,11 +32,13 @@ HASHTAG_CATEGORIES = {
         "#LateNightDeals", "#NightOwlDeals", "#MidnightDeals",
         "#EarlyAccess", "#TodayDeals", "#DailyDeals", "#WeekendSale"
     ],
-    'platform_based': [
-        "#AmazonDeals", "#AmazonIndia", "#AmazonSale",
-        "#FlipkartDeals", "#FlipkartSale", "#MyntraDeals", 
-        "#AjioOffers", "#AjioLoot", "#FashionSale", "#TechDeals"
-    ],
+    'platform_based': {
+        'amazon': ["#AmazonDeals", "#AmazonIndia", "#AmazonSale", "#AmazonOffer"],
+        'flipkart': ["#FlipkartDeals", "#FlipkartSale", "#FlipkartShopping"],
+        'myntra': ["#MyntraDeals", "#FashionSale", "#MyntraFashion"],
+        'ajio': ["#AjioOffers", "#AjioLoot", "#AjioFashion"],
+        'other': ["#Deals", "#Offers", "#Discount", "#Sale"]
+    },
     'price_based': [
         "#Under500", "#Under1000", "#BudgetFriendly", "#ValueDeal",
         "#PremiumDeals", "#LuxuryDeals", "#Affordable", "#CheapDeals"
@@ -45,12 +46,8 @@ HASHTAG_CATEGORIES = {
     'category_based': [
         "#Electronics", "#Fashion", "#HomeDecor", "#Kitchen", 
         "#Beauty", "#MobileDeals", "#LaptopDeals", "#GadgetDeals",
-        "#HomeAppliances", "#KitchenEssentials", "#ClothingSale"
-    ],
-    'urgency_based': [
-        "#LimitedTime", "#FlashSale", "#TodayOnly", "#Hurry",
-        "#QuickDeal", "#HotDeal", "#SpecialOffer", "#ExclusiveDeal",
-        "#LimitedStock", "#LastChance"
+        "#HomeAppliances", "#KitchenEssentials", "#ClothingSale",
+        "#TechDeals", "#Appliances", "#FashionDeals"
     ]
 }
 
@@ -58,30 +55,29 @@ def get_rotating_hashtags(product_text, platform, message_count):
     """Get rotating hashtags that change based on multiple factors"""
     selected_hashtags = []
     
-    # Platform-specific (always include 1)
+    # Platform-specific (rotate based on message count)
     platform_lower = platform.lower()
     if "amazon" in platform_lower:
-        platform_options = ["#AmazonDeals", "#AmazonIndia", "#AmazonSale"]
+        platform_tags = HASHTAG_CATEGORIES['platform_based']['amazon']
     elif "flipkart" in platform_lower:
-        platform_options = ["#FlipkartDeals", "#FlipkartSale"]
+        platform_tags = HASHTAG_CATEGORIES['platform_based']['flipkart']
     elif "myntra" in platform_lower:
-        platform_options = ["#MyntraDeals", "#FashionSale"]
+        platform_tags = HASHTAG_CATEGORIES['platform_based']['myntra']
     elif "ajio" in platform_lower:
-        platform_options = ["#AjioOffers", "#AjioLoot"]
+        platform_tags = HASHTAG_CATEGORIES['platform_based']['ajio']
     else:
-        platform_options = ["#Deals", "#Offers"]
+        platform_tags = HASHTAG_CATEGORIES['platform_based']['other']
     
-    # Rotate platform hashtags based on message count
-    platform_idx = message_count % len(platform_options)
-    selected_hashtags.append(platform_options[platform_idx])
+    platform_idx = (message_count // 2) % len(platform_tags)  # Change every 2 messages
+    selected_hashtags.append(platform_tags[platform_idx])
     
-    # Time-based (rotate every hour)
+    # Time-based (rotate every hour + message count)
     current_hour = datetime.now().hour
-    time_options = HASHTAG_CATEGORIES['time_based']
-    time_idx = (current_hour + message_count) % len(time_options)
-    selected_hashtags.append(time_options[time_idx])
+    time_tags = HASHTAG_CATEGORIES['time_based']
+    time_idx = (current_hour + (message_count // 3)) % len(time_tags)  # Change every 3 messages
+    selected_hashtags.append(time_tags[time_idx])
     
-    # Price-based (if price detected)
+    # Price-based OR Category-based (alternate)
     price_match = re.search(r'₹(\d+,?\d+)', product_text)
     if price_match:
         price = int(price_match.group(1).replace(',', ''))
@@ -95,30 +91,32 @@ def get_rotating_hashtags(product_text, platform, message_count):
             price_tag = "#PremiumDeals"
         selected_hashtags.append(price_tag)
     else:
-        # Category-based as fallback
+        # Smart category detection
         text_lower = product_text.lower()
-        if any(word in text_lower for word in ['laptop', 'mobile', 'headphone', 'earphone', 'tablet', 'camera']):
+        category_tags = HASHTAG_CATEGORIES['category_based']
+        
+        if any(word in text_lower for word in ['laptop', 'mobile', 'headphone', 'earphone', 'tablet', 'camera', 'tech']):
             category_tag = "#TechDeals"
-        elif any(word in text_lower for word in ['shirt', 'dress', 'jeans', 'shoe', 'sandal', 'top', 'kurta']):
+        elif any(word in text_lower for word in ['shirt', 'dress', 'jeans', 'shoe', 'sandal', 'top', 'kurta', 'fashion']):
             category_tag = "#FashionDeals"
         elif any(word in text_lower for word in ['kitchen', 'cooker', 'home', 'furniture', 'decor', 'appliance']):
             category_tag = "#HomeDecor"
         elif any(word in text_lower for word in ['beauty', 'cream', 'lotion', 'makeup', 'skincare']):
             category_tag = "#BeautyDeals"
         else:
-            # Random category based on message count
-            categories = HASHTAG_CATEGORIES['category_based']
-            category_idx = (message_count * 3) % len(categories)
-            category_tag = categories[category_idx]
+            # Rotate through categories
+            category_idx = (message_count * 5) % len(category_tags)
+            category_tag = category_tags[category_idx]
+        
         selected_hashtags.append(category_tag)
     
-    return ' '.join(selected_hashtags[:3])  # Max 3 hashtags
+    return ' '.join(selected_hashtags[:3])
 
 # ==================== ENHANCED DEDUPLICATION ====================
-seen_hashes = set()  # Full message hashes
-seen_asins = set()   # Amazon ASINs
-seen_product_ids = set()  # Flipkart/Myntra/Ajio product IDs
-seen_urls = set()    # Clean URLs
+seen_hashes = set()
+seen_asins = set()
+seen_product_ids = set()
+seen_urls = set()
 last_processed_timestamps = {}
 
 # ==================== SAFETY TRACKING ====================
@@ -135,16 +133,49 @@ class Stats:
         self.check_count = 0
         self.missed_deals = 0
         self.duplicates_blocked = 0
+        self.spam_filtered = 0
     
     def increment_forwarded(self): self.total_forwarded += 1
     def increment_check(self): self.check_count += 1
     def increment_missed(self): self.missed_deals += 1
     def increment_duplicates(self): self.duplicates_blocked += 1
+    def increment_spam(self): self.spam_filtered += 1
     def get_duration(self): return datetime.now() - self.session_start
 
 stats = Stats()
 
-# ==================== ENHANCED URL PROCESSING ====================
+# ==================== SMART MESSAGE FILTERING ====================
+def is_spam_message(text):
+    """Filter out spammy messages like 'FAAAST', 'Coupon' without products"""
+    if not text:
+        return True
+    
+    text_lower = text.lower()
+    
+    # Spam patterns to filter out
+    spam_patterns = [
+        r'f+a+s+t+',  # FAAAST, FASSST, etc.
+        r'coupon.*none',  # Coupon with none
+        r'^\s*[0-9,]+\s*$',  # Just numbers
+        r'^[^a-z0-9]*$',  # No meaningful content
+    ]
+    
+    for pattern in spam_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return True
+    
+    # Must contain URL to be a valid deal
+    urls = re.findall(r'https?://[^\s]+', text)
+    if not urls:
+        return True
+    
+    # Must contain some product-related text (not just "coupon" or "deal")
+    product_indicators = ['amazon', 'flipkart', 'myntra', 'ajio', 'product', 'buy', 'shop', 'offer']
+    if not any(indicator in text_lower for indicator in product_indicators):
+        return True
+    
+    return False
+
 def extract_amazon_asin(url):
     """Extract Amazon ASIN from URL"""
     patterns = [
@@ -162,7 +193,7 @@ def extract_amazon_asin(url):
 
 def extract_product_id(url):
     """Extract product ID from various platforms"""
-    if 'flipkart.com' in url:
+    if 'flipkart.com' in url or 'fkrt.co' in url:
         match = re.search(r'/p/([a-zA-Z0-9]+)', url)
         return f"flipkart_{match.group(1)}" if match else None
     elif 'myntra.com' in url:
@@ -244,8 +275,8 @@ def check_daily_limits():
     
     if hourly_message_count >= MAX_HOURLY_MESSAGES:
         print(f"⏳ HOURLY LIMIT REACHED! ({MAX_HOURLY_MESSAGES}/hour)")
-        print("   Sleeping for 15 minutes...")
-        time.sleep(900)
+        print("   Sleeping for 10 minutes...")
+        time.sleep(600)
         hourly_message_count = 0
         return True
     
@@ -380,6 +411,12 @@ def process_message_ultra_fast(text):
     if not text: 
         return None, None
     
+    # Filter out spam messages first
+    if is_spam_message(text):
+        stats.increment_spam()
+        print("    🚫 Filtered: Spam message")
+        return None, None
+    
     # Clean source info
     text = re.sub(r'From\s*\*\s*[^:]*:|### From.*', '', text)
     
@@ -412,21 +449,27 @@ def process_message_ultra_fast(text):
         platform = "🔗 Other"
         final_url = clean_and_normalize_url(main_url)
     
-    # Extract product name
+    # Extract product name (better logic)
     clean_text = re.sub(r'https?://[^\s]+', '', text)
-    lines = [line.strip() for line in clean_text.split('\n') if line.strip() and len(line) > 8]
-    product_name = lines[0] if lines else "Hot Deal! 🔥"
+    lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
     
-    # Extract price & discount
-    price_match = re.search(r'@\s*(\d+,?\d*)|₹\s*(\d+,?\d*)', text)
-    price_info = f"💰 ₹{price_match.group(1)}" if price_match else ""
+    # Find the best product name (not empty, not too short, not spammy)
+    product_name = "Hot Deal! 🔥"
+    for line in lines:
+        if len(line) > 10 and not re.search(r'f+a+s+t+', line.lower()):
+            product_name = line
+            break
     
-    discount_match = re.search(r'(\d+%)', text)
+    # Extract price & discount (improved pattern matching)
+    price_match = re.search(r'[@₹]\s*(\d+,?\d*,?\d+)', text)
+    price_info = f"💰 ₹{price_match.group(1)}" if price_match else "💰 Price not shown"
+    
+    discount_match = re.search(r'(\d+%?\s*off|off\s*\d+%?)', text, re.IGNORECASE)
     discount_info = f"🎯 {discount_match.group(1)}" if discount_match else ""
     
     # Build message with rotating hashtags
     message_parts = [platform, f"\n{product_name}"]
-    if price_info:
+    if price_info and "not shown" not in price_info:
         message_parts.append(f"\n{price_info}")
     if discount_info:
         message_parts.append(f"\n{discount_info}")
@@ -500,8 +543,8 @@ def deal_forwarder_main():
     print(f"🎯 Destination: {DESTINATION_CHANNEL}")
     print(f"🛡️  Daily limit: {MAX_DAILY_MESSAGES} messages")
     print(f"⚡ Check interval: {CHECK_INTERVAL} seconds")
-    print(f"🔍 Enhanced deduplication: ASIN + Product ID + URL + Text hash")
-    print(f"🏷️  Rotating hashtags: Platform + Time + Price/Category")
+    print(f"📨 Messages per check: {MESSAGE_LIMIT} (DOUBLE!)")
+    print(f"🔍 Enhanced filtering: Spam + Duplicates + Better hashtags")
     print("=" * 60)
     
     # Initialize fresh start
@@ -552,7 +595,7 @@ def deal_forwarder_main():
             for name, channel_id in zip(channel_names, SOURCE_CHANNELS):
                 deals = process_channel_real_time(name, channel_id)
                 total_forwarded += deals
-                time.sleep(0.5)  # Small delay between channels
+                time.sleep(0.3)  # Reduced delay between channels
             
             # Status update
             if total_forwarded > 0:
@@ -562,6 +605,7 @@ def deal_forwarder_main():
             
             print(f"📈 Total forwarded: {stats.total_forwarded}")
             print(f"🚫 Duplicates blocked: {stats.duplicates_blocked}")
+            print(f"🛑 Spam filtered: {stats.spam_filtered}")
             print(f"⏳ Next check in {CHECK_INTERVAL} seconds...\n")
             time.sleep(CHECK_INTERVAL)
             
@@ -619,6 +663,7 @@ def home():
                 
                 <p><strong>Total Forwarded:</strong> {stats.total_forwarded}</p>
                 <p><strong>Duplicates Blocked:</strong> {stats.duplicates_blocked}</p>
+                <p><strong>Spam Filtered:</strong> {stats.spam_filtered}</p>
                 <p><strong>Uptime:</strong> {str(uptime).split('.')[0]}</p>
                 <p><strong>Health Checks:</strong> {stats.check_count}</p>
             </div>
@@ -633,7 +678,7 @@ def home():
             </div>
             
             <hr>
-            <p><em>✅ Enhanced Features: Rotating Hashtags + Strict Deduplication + 24/7 Operation!</em></p>
+            <p><em>✅ Enhanced Features: Spam Filtering + Rotating Hashtags + Better Price Detection + 24/7 Operation!</em></p>
         </div>
     </body>
     </html>
@@ -651,12 +696,14 @@ def health():
         "forwarded_today": daily_message_count,
         "total_forwarded": stats.total_forwarded,
         "duplicates_blocked": stats.duplicates_blocked,
+        "spam_filtered": stats.spam_filtered,
         "uptime": str(stats.get_duration()),
         "health_checks": stats.check_count,
         "features": [
-            "rotating_hashtags",
-            "strict_deduplication", 
-            "amazon_affiliate_forced",
+            "spam_filtering",
+            "rotating_hashtags", 
+            "better_price_detection",
+            "enhanced_deduplication",
             "24_7_operation",
             "safety_limits",
             "multi_platform_support"
@@ -692,6 +739,7 @@ def stats_page():
             "total_forwarded": stats.total_forwarded,
             "missed_deals": stats.missed_deals,
             "duplicates_blocked": stats.duplicates_blocked,
+            "spam_filtered": stats.spam_filtered,
             "health_checks": stats.check_count,
             "uptime": str(stats.get_duration())
         },
@@ -705,8 +753,7 @@ def stats_page():
             "check_interval": CHECK_INTERVAL,
             "min_send_delay": MIN_TIME_BETWEEN_SENDS,
             "message_limit_per_check": MESSAGE_LIMIT,
-            "amazon_affiliate_tag": AMAZON_AFFILIATE_TAG,
-            "use_earnkaro": USE_EARNKARO
+            "amazon_affiliate_tag": AMAZON_AFFILIATE_TAG
         }
     }
 
@@ -730,20 +777,9 @@ def waha_health():
         "timestamp": datetime.now().isoformat()
     }
 
-@app.route('/update-waha-url', methods=['GET'])
-def update_waha_url():
-    """Update WAHA URL (for manual use)"""
-    new_url = request.args.get('url')
-    if new_url:
-        global WAHA_URL
-        WAHA_URL = new_url
-        return {"status": "success", "message": f"WAHA URL updated to: {new_url}"}
-    else:
-        return {"status": "error", "message": "No URL provided"}
-
 # ==================== START SERVICES ====================
 print("🎯 Starting ENHANCED WhatsApp Forwarder...")
-print("💡 Features: Rotating Hashtags + Strict Deduplication + 24/7 Operation")
+print("💡 Features: Spam Filtering + Rotating Hashtags + Better Price Detection")
 print("🌐 Web service starting on port 5000...")
 
 # Start the forwarder in background thread
