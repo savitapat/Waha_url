@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs
 app = Flask(__name__)
 
 # ==================== CONFIGURATION ====================
-WAHA_URL = os.getenv("WAHA_URL", "https://your-railway-waha.up.railway.app")
+WAHA_URL = os.getenv("WAHA_URL", "https://waha-production-32e7.up.railway.app")
 DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL", "120363422574401710@newsletter")
 SOURCE_CHANNELS = os.getenv("SOURCE_CHANNELS", "120363177070916101@newsletter,120363179368338362@newsletter,120363180244702234@newsletter,120363290169377613@newsletter,120363161802971651@newsletter").split(",")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "lootfastdeals-21")
@@ -418,6 +418,7 @@ def home():
             .stats {{ background: #e2e3e5; padding: 15px; border-radius: 5px; }}
             .progress {{ background: #e9ecef; border-radius: 5px; overflow: hidden; margin: 10px 0; }}
             .progress-bar {{ background: #007bff; height: 20px; }}
+            .warning {{ background: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin: 10px 0; }}
         </style>
     </head>
     <body>
@@ -428,10 +429,14 @@ def home():
                 <strong>Status:</strong> Monitoring 5 channels for deals
             </div>
             
+            <div class="warning">
+                <strong>⚠️ Note:</strong> Use the link below for QR Code scanning
+            </div>
+            
             <div class="stats">
                 <p><strong>WAHA Status:</strong> {waha_status}</p>
                 <p><strong>Current WAHA:</strong> {WAHA_URL}</p>
-                <p><strong>WAHA Dashboard:</strong> <a href="{WAHA_URL}/web" target="_blank">Click here for QR Code</a></p>
+                <p><strong>QR Code Dashboard:</strong> <a href="https://waha-1-v384.onrender.com/web" target="_blank">Click here for QR Code</a></p>
                 
                 <p><strong>Forwarded Today:</strong> {daily_message_count}/{MAX_DAILY_MESSAGES} ({daily_remaining} remaining)</p>
                 <div class="progress">
