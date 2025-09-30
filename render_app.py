@@ -418,7 +418,6 @@ def home():
             .stats {{ background: #e2e3e5; padding: 15px; border-radius: 5px; }}
             .progress {{ background: #e9ecef; border-radius: 5px; overflow: hidden; margin: 10px 0; }}
             .progress-bar {{ background: #007bff; height: 20px; }}
-            .warning {{ background: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin: 10px 0; }}
         </style>
     </head>
     <body>
@@ -429,14 +428,10 @@ def home():
                 <strong>Status:</strong> Monitoring 5 channels for deals
             </div>
             
-            <div class="warning">
-                <strong>⚠️ Note:</strong> Use the link below for QR Code scanning
-            </div>
-            
             <div class="stats">
                 <p><strong>WAHA Status:</strong> {waha_status}</p>
                 <p><strong>Current WAHA:</strong> {WAHA_URL}</p>
-                <p><strong>QR Code Dashboard:</strong> <a href="https://waha-1-v384.onrender.com/web" target="_blank">Click here for QR Code</a></p>
+                <p><strong>WAHA Dashboard:</strong> <a href="{WAHA_URL}/web" target="_blank">Click here for QR Code</a></p>
                 
                 <p><strong>Forwarded Today:</strong> {daily_message_count}/{MAX_DAILY_MESSAGES} ({daily_remaining} remaining)</p>
                 <div class="progress">
