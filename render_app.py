@@ -17,6 +17,7 @@ WAHA_URL = os.getenv("WAHA_URL", "https://waha-production-32e7.up.railway.app")
 DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL", "120363422574401710@newsletter")
 SOURCE_CHANNELS = os.getenv("SOURCE_CHANNELS", "120363177070916101@newsletter,120363179368338362@newsletter,120363180244702234@newsletter,120363290169377613@newsletter,120363161802971651@newsletter").split(",")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "lootfastdeals-21")
+USE_EARNKARO = os.getenv("USE_EARNKARO", "false").lower() == "true"
 
 # ==================== SAFETY LIMITS ====================
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "30"))
@@ -25,69 +26,100 @@ MAX_DAILY_MESSAGES = int(os.getenv("MAX_DAILY_MESSAGES", "400"))
 MAX_HOURLY_MESSAGES = int(os.getenv("MAX_HOURLY_MESSAGES", "35"))
 MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT", "6"))
 
-# ==================== ENHANCED HASHTAG SYSTEM ====================
-ALL_HASHTAGS = [
-    "#AmazonDeals", "#AmazonIndia", "#AmazonSale", "#FlipkartDeals", 
-    "#FlipkartSale", "#MyntraDeals", "#AjioOffers", "#AjioLoot",
-    "#Deals", "#Offers", "#Discount", "#Sale", "#Loot", "#Savings",
-    "#SaveMoney", "#BudgetShopping", "#Affordable", "#CheapDeals",
-    "#Electronics", "#Fashion", "#HomeDecor", "#Kitchen", "#Beauty",
-    "#MobileDeals", "#LaptopDeals", "#FashionSale", "#TechDeals",
-    "#GadgetDeals", "#HomeAppliances", "#KitchenEssentials",
-    "#LimitedTime", "#FlashSale", "#TodayOnly", "#Hurry", "#QuickDeal",
-    "#HotDeal", "#SpecialOffer", "#ExclusiveDeal", "#LimitedStock",
-    "#Under500", "#Under1000", "#BudgetFriendly", "#ValueDeal",
-    "#PremiumDeals", "#LuxuryDeals",
-    "#MorningDeals", "#AfternoonDeals", "#EveningDeals", "#LateNightDeals",
-    "#NightOwlDeals", "#EarlyAccess", "#MidnightDeals",
-    "#DailyDeals", "#WeekendSale", "#TodayDeals", "#NewArrivals"
-]
+# ==================== ENHANCED ROTATING HASHTAGS ====================
+HASHTAG_CATEGORIES = {
+    'time_based': [
+        "#MorningDeals", "#AfternoonDeals", "#EveningDeals", 
+        "#LateNightDeals", "#NightOwlDeals", "#MidnightDeals",
+        "#EarlyAccess", "#TodayDeals", "#DailyDeals", "#WeekendSale"
+    ],
+    'platform_based': [
+        "#AmazonDeals", "#AmazonIndia", "#AmazonSale",
+        "#FlipkartDeals", "#FlipkartSale", "#MyntraDeals", 
+        "#AjioOffers", "#AjioLoot", "#FashionSale", "#TechDeals"
+    ],
+    'price_based': [
+        "#Under500", "#Under1000", "#BudgetFriendly", "#ValueDeal",
+        "#PremiumDeals", "#LuxuryDeals", "#Affordable", "#CheapDeals"
+    ],
+    'category_based': [
+        "#Electronics", "#Fashion", "#HomeDecor", "#Kitchen", 
+        "#Beauty", "#MobileDeals", "#LaptopDeals", "#GadgetDeals",
+        "#HomeAppliances", "#KitchenEssentials", "#ClothingSale"
+    ],
+    'urgency_based': [
+        "#LimitedTime", "#FlashSale", "#TodayOnly", "#Hurry",
+        "#QuickDeal", "#HotDeal", "#SpecialOffer", "#ExclusiveDeal",
+        "#LimitedStock", "#LastChance"
+    ]
+}
 
-def get_smart_hashtags(product_text, platform):
-    """Get context-aware hashtags (2-3 max)"""
-    base_hashtags = []
+def get_rotating_hashtags(product_text, platform, message_count):
+    """Get rotating hashtags that change based on multiple factors"""
+    selected_hashtags = []
     
+    # Platform-specific (always include 1)
     platform_lower = platform.lower()
     if "amazon" in platform_lower:
-        base_hashtags.extend(["#AmazonDeals", "#AmazonIndia"])
+        platform_options = ["#AmazonDeals", "#AmazonIndia", "#AmazonSale"]
     elif "flipkart" in platform_lower:
-        base_hashtags.extend(["#FlipkartDeals", "#FlipkartSale"])
+        platform_options = ["#FlipkartDeals", "#FlipkartSale"]
     elif "myntra" in platform_lower:
-        base_hashtags.extend(["#MyntraDeals", "#FashionSale"])
+        platform_options = ["#MyntraDeals", "#FashionSale"]
     elif "ajio" in platform_lower:
-        base_hashtags.extend(["#AjioOffers", "#AjioLoot"])
-    
-    current_hour = datetime.now().hour
-    if 6 <= current_hour < 12:
-        base_hashtags.append("#MorningDeals")
-    elif 12 <= current_hour < 17:
-        base_hashtags.append("#AfternoonDeals")
-    elif 17 <= current_hour < 22:
-        base_hashtags.append("#EveningDeals")
-    elif 22 <= current_hour <= 23:
-        base_hashtags.extend(["#LateNightDeals", "#NightOwlDeals"])
+        platform_options = ["#AjioOffers", "#AjioLoot"]
     else:
-        base_hashtags.extend(["#MidnightDeals", "#EarlyAccess", "#NightOwlDeals"])
+        platform_options = ["#Deals", "#Offers"]
     
+    # Rotate platform hashtags based on message count
+    platform_idx = message_count % len(platform_options)
+    selected_hashtags.append(platform_options[platform_idx])
+    
+    # Time-based (rotate every hour)
+    current_hour = datetime.now().hour
+    time_options = HASHTAG_CATEGORIES['time_based']
+    time_idx = (current_hour + message_count) % len(time_options)
+    selected_hashtags.append(time_options[time_idx])
+    
+    # Price-based (if price detected)
     price_match = re.search(r'₹(\d+,?\d+)', product_text)
     if price_match:
         price = int(price_match.group(1).replace(',', ''))
         if price < 500:
-            base_hashtags.append("#Under500")
+            price_tag = "#Under500"
         elif price < 1000:
-            base_hashtags.append("#Under1000")
+            price_tag = "#Under1000"
         elif price < 2000:
-            base_hashtags.append("#BudgetFriendly")
+            price_tag = "#BudgetFriendly"
+        else:
+            price_tag = "#PremiumDeals"
+        selected_hashtags.append(price_tag)
+    else:
+        # Category-based as fallback
+        text_lower = product_text.lower()
+        if any(word in text_lower for word in ['laptop', 'mobile', 'headphone', 'earphone', 'tablet', 'camera']):
+            category_tag = "#TechDeals"
+        elif any(word in text_lower for word in ['shirt', 'dress', 'jeans', 'shoe', 'sandal', 'top', 'kurta']):
+            category_tag = "#FashionDeals"
+        elif any(word in text_lower for word in ['kitchen', 'cooker', 'home', 'furniture', 'decor', 'appliance']):
+            category_tag = "#HomeDecor"
+        elif any(word in text_lower for word in ['beauty', 'cream', 'lotion', 'makeup', 'skincare']):
+            category_tag = "#BeautyDeals"
+        else:
+            # Random category based on message count
+            categories = HASHTAG_CATEGORIES['category_based']
+            category_idx = (message_count * 3) % len(categories)
+            category_tag = categories[category_idx]
+        selected_hashtags.append(category_tag)
     
-    text_lower = product_text.lower()
-    if any(word in text_lower for word in ['laptop', 'mobile', 'headphone', 'earphone', 'tablet', 'camera']):
-        base_hashtags.extend(["#TechDeals", "#Electronics"])
-    elif any(word in text_lower for word in ['shirt', 'dress', 'jeans', 'shoe', 'sandal', 'top', 'kurta']):
-        base_hashtags.extend(["#FashionDeals", "#ClothingSale"])
-    elif any(word in text_lower for word in ['kitchen', 'cooker', 'home', 'furniture', 'decor', 'appliance']):
-        base_hashtags.extend(["#HomeDecor", "#KitchenDeals"])
-    
-    return ' '.join(base_hashtags[:3])
+    return ' '.join(selected_hashtags[:3])  # Max 3 hashtags
+
+# ==================== ENHANCED DEDUPLICATION ====================
+seen_hashes = set()  # Full message hashes
+seen_asins = set()   # Amazon ASINs
+seen_product_ids = set()  # Flipkart/Myntra/Ajio product IDs
+seen_urls = set()    # Clean URLs
+last_processed_timestamps = {}
 
 # ==================== SAFETY TRACKING ====================
 last_send_time = 0
@@ -96,23 +128,99 @@ hourly_message_count = 0
 daily_reset_time = time.time()
 hourly_reset_time = time.time()
 
-# ==================== DEDUPLICATION ====================
-seen_hashes = set()
-last_processed_timestamps = {}
-
 class Stats:
     def __init__(self):
         self.total_forwarded = 0
         self.session_start = datetime.now()
         self.check_count = 0
         self.missed_deals = 0
+        self.duplicates_blocked = 0
     
     def increment_forwarded(self): self.total_forwarded += 1
     def increment_check(self): self.check_count += 1
     def increment_missed(self): self.missed_deals += 1
+    def increment_duplicates(self): self.duplicates_blocked += 1
     def get_duration(self): return datetime.now() - self.session_start
 
 stats = Stats()
+
+# ==================== ENHANCED URL PROCESSING ====================
+def extract_amazon_asin(url):
+    """Extract Amazon ASIN from URL"""
+    patterns = [
+        r'/dp/([A-Z0-9]{10})',
+        r'/gp/product/([A-Z0-9]{10})',
+        r'/product/([A-Z0-9]{10})',
+        r'&asin=([A-Z0-9]{10})',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url, re.IGNORECASE)
+        if match: 
+            return match.group(1).upper()
+    return None
+
+def extract_product_id(url):
+    """Extract product ID from various platforms"""
+    if 'flipkart.com' in url:
+        match = re.search(r'/p/([a-zA-Z0-9]+)', url)
+        return f"flipkart_{match.group(1)}" if match else None
+    elif 'myntra.com' in url:
+        match = re.search(r'/product/([a-zA-Z0-9]+)', url)
+        return f"myntra_{match.group(1)}" if match else None
+    elif 'ajio.com' in url:
+        match = re.search(r'/p/([a-zA-Z0-9]+)', url)
+        return f"ajio_{match.group(1)}" if match else None
+    return None
+
+def clean_and_normalize_url(url):
+    """Clean URL and remove tracking parameters"""
+    try:
+        parsed = urlparse(url)
+        
+        # Remove common tracking parameters
+        query_params = parse_qs(parsed.query)
+        tracking_params = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 
+                          'utm_content', 'ref', 'cmpid', 'source', 'icid', 'linkCode']
+        
+        for param in tracking_params:
+            query_params.pop(param, None)
+        
+        # Rebuild clean URL
+        clean_query = '&'.join([f"{k}={v[0]}" for k, v in query_params.items()])
+        cleaned_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        if clean_query:
+            cleaned_url += f"?{clean_query}"
+        
+        return cleaned_url
+    except:
+        return url
+
+def apply_amazon_affiliate(url):
+    """Always apply our Amazon affiliate tag, replacing any existing"""
+    if not url or ('amazon.' not in url.lower() and 'amzn.to' not in url.lower()):
+        return url
+    
+    # Clean the URL first
+    cleaned_url = clean_and_normalize_url(url)
+    
+    # Remove any existing tag
+    cleaned_url = re.sub(r'&tag=[^&]+', '', cleaned_url)
+    cleaned_url = re.sub(r'\?tag=[^&]+', '', cleaned_url)
+    
+    # Add our tag
+    separator = '&' if '?' in cleaned_url else '?'
+    return f"{cleaned_url}{separator}tag={AMAZON_AFFILIATE_TAG}"
+
+def is_safe_url(url):
+    """Check if URL is from safe domains"""
+    safe_domains = ['amazon.in', 'amzn.to', 'flipkart.com', 'fkrt.co', 
+                   'myntra.com', 'ajio.com', 'flipkart.com']
+    try: 
+        domain = urlparse(url).netloc.lower()
+        return any(safe_domain in domain for safe_domain in safe_domains)
+    except: 
+        return False
 
 # ==================== CORE SAFETY FUNCTIONS ====================
 def check_daily_limits():
@@ -149,6 +257,68 @@ def get_safe_send_delay():
         base_delay += 2
     random_variation = random.uniform(1, 3)
     return base_delay + random_variation
+
+# ==================== ENHANCED DEDUPLICATION FUNCTIONS ====================
+def generate_message_hash(text): 
+    return hashlib.md5(text.encode()).hexdigest()
+
+def is_duplicate_message(text, url, platform):
+    """Enhanced duplicate detection using multiple methods"""
+    if not text or not url:
+        return True
+    
+    # Method 1: Full message hash
+    message_hash = generate_message_hash(text)
+    if message_hash in seen_hashes:
+        stats.increment_duplicates()
+        print("    🔄 Duplicate: Same message content")
+        return True
+    
+    # Method 2: URL-based deduplication
+    clean_url = clean_and_normalize_url(url)
+    if clean_url in seen_urls:
+        stats.increment_duplicates()
+        print("    🔄 Duplicate: Same URL")
+        return True
+    
+    # Method 3: Platform-specific ID deduplication
+    if 'amazon' in platform.lower():
+        asin = extract_amazon_asin(url)
+        if asin and asin in seen_asins:
+            stats.increment_duplicates()
+            print(f"    🔄 Duplicate: Amazon ASIN {asin}")
+            return True
+    else:
+        product_id = extract_product_id(url)
+        if product_id and product_id in seen_product_ids:
+            stats.increment_duplicates()
+            print(f"    🔄 Duplicate: Product ID {product_id}")
+            return True
+    
+    return False
+
+def add_to_dedup(text, url, platform):
+    """Add message to duplicate tracking"""
+    if not text or not url:
+        return
+    
+    # Track full message hash
+    message_hash = generate_message_hash(text)
+    seen_hashes.add(message_hash)
+    
+    # Track clean URL
+    clean_url = clean_and_normalize_url(url)
+    seen_urls.add(clean_url)
+    
+    # Track platform-specific IDs
+    if 'amazon' in platform.lower():
+        asin = extract_amazon_asin(url)
+        if asin:
+            seen_asins.add(asin)
+    else:
+        product_id = extract_product_id(url)
+        if product_id:
+            seen_product_ids.add(product_id)
 
 # ==================== WAHA COMMUNICATION ====================
 def get_waha_health():
@@ -205,35 +375,42 @@ def get_channel_messages(channel_id, limit=MESSAGE_LIMIT):
     except: 
         return []
 
-# ==================== MESSAGE PROCESSING ====================
+# ==================== ENHANCED MESSAGE PROCESSING ====================
 def process_message_ultra_fast(text):
-    if not text: return None
+    if not text: 
+        return None, None
     
     # Clean source info
     text = re.sub(r'From\s*\*\s*[^:]*:|### From.*', '', text)
     
     # Extract URLs
     urls = re.findall(r'https?://[^\s]+', text)
-    if not urls: return None
+    if not urls: 
+        return None, None
     
-    main_url = urls[0]
+    # Use first safe URL
+    safe_urls = [url for url in urls if is_safe_url(url)]
+    if not safe_urls: 
+        return None, None
     
-    # Platform detection & affiliate tagging
+    main_url = safe_urls[0]
+    
+    # Platform detection
     if 'amazon' in main_url or 'amzn.to' in main_url:
         platform = "🛍️ Amazon"
-        final_url = f"{main_url}{'&' if '?' in main_url else '?'}tag={AMAZON_AFFILIATE_TAG}"
-    elif 'flipkart' in main_url:
+        final_url = apply_amazon_affiliate(main_url)
+    elif 'flipkart' in main_url or 'fkrt.co' in main_url:
         platform = "📦 Flipkart"
-        final_url = main_url
+        final_url = clean_and_normalize_url(main_url)
     elif 'myntra' in main_url:
         platform = "👕 Myntra"
-        final_url = main_url
+        final_url = clean_and_normalize_url(main_url)
     elif 'ajio' in main_url:
         platform = "🛒 Ajio"
-        final_url = main_url
+        final_url = clean_and_normalize_url(main_url)
     else:
         platform = "🔗 Other"
-        final_url = main_url
+        final_url = clean_and_normalize_url(main_url)
     
     # Extract product name
     clean_text = re.sub(r'https?://[^\s]+', '', text)
@@ -247,7 +424,7 @@ def process_message_ultra_fast(text):
     discount_match = re.search(r'(\d+%)', text)
     discount_info = f"🎯 {discount_match.group(1)}" if discount_match else ""
     
-    # Build message
+    # Build message with rotating hashtags
     message_parts = [platform, f"\n{product_name}"]
     if price_info:
         message_parts.append(f"\n{price_info}")
@@ -256,25 +433,12 @@ def process_message_ultra_fast(text):
     
     message_parts.append(f"\n\n{final_url}")
     
-    # Add smart hashtags
-    smart_hashtags = get_smart_hashtags(text, platform)
-    message_parts.append(f"\n\n{smart_hashtags}")
+    # Add rotating hashtags based on message count
+    rotating_hashtags = get_rotating_hashtags(text, platform, stats.total_forwarded)
+    message_parts.append(f"\n\n{rotating_hashtags}")
     
-    return ''.join(message_parts)
-
-def generate_message_hash(text): 
-    return hashlib.md5(text.encode()).hexdigest()
-
-def is_duplicate(message):
-    if not message: return True
-    message_hash = generate_message_hash(message)
-    if message_hash in seen_hashes: return True
-    return False
-
-def add_to_dedup(message):
-    if not message: return
-    message_hash = generate_message_hash(message)
-    seen_hashes.add(message_hash)
+    final_message = ''.join(message_parts)
+    return final_message, main_url
 
 # ==================== CHANNEL PROCESSING ====================
 def process_channel_real_time(channel_name, channel_id):
@@ -288,27 +452,34 @@ def process_channel_real_time(channel_name, channel_id):
         new_last_timestamp = last_timestamp
         
         for message in reversed(messages):
-            if message.get('fromMe') or not message.get('body'): continue
+            if message.get('fromMe') or not message.get('body'): 
+                continue
             
             message_timestamp = message.get('timestamp', 0)
-            if message_timestamp <= last_timestamp: continue
+            if message_timestamp <= last_timestamp: 
+                continue
                 
             if message_timestamp > new_last_timestamp:
                 new_last_timestamp = message_timestamp
             
-            # Only process messages from last 5 minutes
+            # Process messages from last 5 minutes only
             if time.time() - message_timestamp > 300:
                 stats.increment_missed()
                 continue
             
-            processed_message = process_message_ultra_fast(message.get('body', ''))
-            if not processed_message or is_duplicate(processed_message):
+            processed_message, original_url = process_message_ultra_fast(message.get('body', ''))
+            if not processed_message:
+                continue
+            
+            # Enhanced duplicate check
+            platform = "🛍️ Amazon" if 'amazon' in processed_message.lower() else "📦 Other"
+            if is_duplicate_message(processed_message, original_url, platform):
                 continue
             
             if send_whatsapp_message_optimized(processed_message):
                 deals_found += 1
                 stats.increment_forwarded()
-                add_to_dedup(processed_message)
+                add_to_dedup(processed_message, original_url, platform)
                 print(f"    🚀 {channel_name}: DEAL SENT!")
             
         last_processed_timestamps[channel_id] = new_last_timestamp
@@ -323,12 +494,14 @@ def deal_forwarder_main():
     """MAIN DEAL FORWARDER LOOP - 24/7 OPERATION"""
     channel_names = ["TechFactsDeals", "Loots4u", "Shopping Loot Offers", "Loot Deals Official", "Loot Bazaar"]
     
-    print("🚀 SMART WhatsApp Forwarder - 24/7 Cloud Operation!")
+    print("🚀 ENHANCED WhatsApp Forwarder - 24/7 Cloud Operation!")
     print("=" * 60)
     print(f"📡 WAHA URL: {WAHA_URL}")
     print(f"🎯 Destination: {DESTINATION_CHANNEL}")
     print(f"🛡️  Daily limit: {MAX_DAILY_MESSAGES} messages")
     print(f"⚡ Check interval: {CHECK_INTERVAL} seconds")
+    print(f"🔍 Enhanced deduplication: ASIN + Product ID + URL + Text hash")
+    print(f"🏷️  Rotating hashtags: Platform + Time + Price/Category")
     print("=" * 60)
     
     # Initialize fresh start
@@ -388,6 +561,7 @@ def deal_forwarder_main():
                 print(f"👀 No new deals")
             
             print(f"📈 Total forwarded: {stats.total_forwarded}")
+            print(f"🚫 Duplicates blocked: {stats.duplicates_blocked}")
             print(f"⏳ Next check in {CHECK_INTERVAL} seconds...\n")
             time.sleep(CHECK_INTERVAL)
             
@@ -418,20 +592,25 @@ def home():
             .stats {{ background: #e2e3e5; padding: 15px; border-radius: 5px; }}
             .progress {{ background: #e9ecef; border-radius: 5px; overflow: hidden; margin: 10px 0; }}
             .progress-bar {{ background: #007bff; height: 20px; }}
+            .warning {{ background: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin: 10px 0; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🚀 WhatsApp Deal Forwarder Running 24/7!</h1>
+            <h1>🚀 ENHANCED WhatsApp Deal Forwarder Running 24/7!</h1>
             
             <div class="status {('connected' if waha_status == '✅ Connected' else 'disconnected')}">
                 <strong>Status:</strong> Monitoring 5 channels for deals
             </div>
             
+            <div class="warning">
+                <strong>⚠️ Note:</strong> Use the link below for QR Code scanning
+            </div>
+            
             <div class="stats">
                 <p><strong>WAHA Status:</strong> {waha_status}</p>
                 <p><strong>Current WAHA:</strong> {WAHA_URL}</p>
-                <p><strong>WAHA Dashboard:</strong> <a href="{WAHA_URL}/web" target="_blank">Click here for QR Code</a></p>
+                <p><strong>QR Code Dashboard:</strong> <a href="https://waha-1-v384.onrender.com/web" target="_blank">Click here for QR Code</a></p>
                 
                 <p><strong>Forwarded Today:</strong> {daily_message_count}/{MAX_DAILY_MESSAGES} ({daily_remaining} remaining)</p>
                 <div class="progress">
@@ -439,6 +618,7 @@ def home():
                 </div>
                 
                 <p><strong>Total Forwarded:</strong> {stats.total_forwarded}</p>
+                <p><strong>Duplicates Blocked:</strong> {stats.duplicates_blocked}</p>
                 <p><strong>Uptime:</strong> {str(uptime).split('.')[0]}</p>
                 <p><strong>Health Checks:</strong> {stats.check_count}</p>
             </div>
@@ -447,11 +627,13 @@ def home():
                 <p><strong>Quick Links:</strong></p>
                 <a href="/health">Health Check</a> | 
                 <a href="/ping">Ping</a> | 
-                <a href="/stats">Statistics</a>
+                <a href="/stats">Statistics</a> |
+                <a href="/test-whatsapp">Test WhatsApp</a> |
+                <a href="/waha-health">WAHA Health</a>
             </div>
             
             <hr>
-            <p><em>✅ WAHA on Railway + Forwarder on Render = 24/7 Operation!</em></p>
+            <p><em>✅ Enhanced Features: Rotating Hashtags + Strict Deduplication + 24/7 Operation!</em></p>
         </div>
     </body>
     </html>
@@ -462,14 +644,23 @@ def health():
     waha_status = "✅ Connected" if get_waha_health() else "❌ Disconnected"
     return {
         "status": "running", 
-        "service": "deal-forwarder",
+        "service": "enhanced-deal-forwarder",
         "timestamp": datetime.now().isoformat(),
         "waha_status": waha_status,
         "waha_url": WAHA_URL,
         "forwarded_today": daily_message_count,
         "total_forwarded": stats.total_forwarded,
+        "duplicates_blocked": stats.duplicates_blocked,
         "uptime": str(stats.get_duration()),
-        "health_checks": stats.check_count
+        "health_checks": stats.check_count,
+        "features": [
+            "rotating_hashtags",
+            "strict_deduplication", 
+            "amazon_affiliate_forced",
+            "24_7_operation",
+            "safety_limits",
+            "multi_platform_support"
+        ]
     }
 
 @app.route('/ping')
@@ -478,7 +669,7 @@ def ping():
     return {
         "status": "pong", 
         "timestamp": datetime.now().isoformat(),
-        "service": "deal-forwarder",
+        "service": "enhanced-deal-forwarder",
         "message": "Service is alive and running"
     }
 
@@ -489,7 +680,7 @@ def stats_page():
     hourly_remaining = MAX_HOURLY_MESSAGES - hourly_message_count
     
     return {
-        "service": "deal-forwarder",
+        "service": "enhanced-deal-forwarder",
         "timestamp": datetime.now().isoformat(),
         "message_limits": {
             "daily": f"{daily_message_count}/{MAX_DAILY_MESSAGES}",
@@ -500,19 +691,59 @@ def stats_page():
         "performance": {
             "total_forwarded": stats.total_forwarded,
             "missed_deals": stats.missed_deals,
+            "duplicates_blocked": stats.duplicates_blocked,
             "health_checks": stats.check_count,
             "uptime": str(stats.get_duration())
+        },
+        "deduplication": {
+            "tracked_hashes": len(seen_hashes),
+            "tracked_asins": len(seen_asins),
+            "tracked_product_ids": len(seen_product_ids),
+            "tracked_urls": len(seen_urls)
         },
         "configuration": {
             "check_interval": CHECK_INTERVAL,
             "min_send_delay": MIN_TIME_BETWEEN_SENDS,
-            "message_limit_per_check": MESSAGE_LIMIT
+            "message_limit_per_check": MESSAGE_LIMIT,
+            "amazon_affiliate_tag": AMAZON_AFFILIATE_TAG,
+            "use_earnkaro": USE_EARNKARO
         }
     }
 
+@app.route('/test-whatsapp')
+def test_whatsapp():
+    """Test WhatsApp sending"""
+    test_message = "✅ Test message from Enhanced Deal Forwarder\nThis confirms your system is working!\n\nTimestamp: " + datetime.now().isoformat()
+    
+    if send_whatsapp_message_optimized(test_message):
+        return {"status": "success", "message": "Test message sent successfully"}
+    else:
+        return {"status": "error", "message": "Failed to send test message"}
+
+@app.route('/waha-health')
+def waha_health():
+    """Check WAHA health status"""
+    health_status = get_waha_health()
+    return {
+        "waha_url": WAHA_URL,
+        "status": "healthy" if health_status else "unhealthy",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.route('/update-waha-url', methods=['GET'])
+def update_waha_url():
+    """Update WAHA URL (for manual use)"""
+    new_url = request.args.get('url')
+    if new_url:
+        global WAHA_URL
+        WAHA_URL = new_url
+        return {"status": "success", "message": f"WAHA URL updated to: {new_url}"}
+    else:
+        return {"status": "error", "message": "No URL provided"}
+
 # ==================== START SERVICES ====================
-print("🎯 Starting Smart WhatsApp Forwarder...")
-print("💡 WAHA on Railway + Forwarder on Render")
+print("🎯 Starting ENHANCED WhatsApp Forwarder...")
+print("💡 Features: Rotating Hashtags + Strict Deduplication + 24/7 Operation")
 print("🌐 Web service starting on port 5000...")
 
 # Start the forwarder in background thread
