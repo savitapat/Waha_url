@@ -1,35 +1,51 @@
 #!/bin/bash
+set -euo pipefail
 
-# ===================================================
-# START: Install cloudflared if not present
-# ===================================================
-if ! [ -x "$(command -v cloudflared)" ]; then
-    echo "Installing cloudflared..."
-    wget -O cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-    chmod +x cloudflared
-    sudo mv cloudflared /usr/local/bin/
+# ---------- config ----------
+TUNNEL_NAME="my-waha"
+CREDS_PATH="/home/cloudflared/creds.json"
+CLOUDFLARED_BIN="/home/cloudflared/cloudflared"
+APP_CMD="python3 render_app.py"
+# ----------------------------
+
+echo "== start.sh: begin =="
+
+# make dir for cloudflared and creds
+mkdir -p /home/cloudflared
+chmod 700 /home/cloudflared || true
+
+# 1) Decode tunnel credentials from env var (TUNNEL_CREDS_B64) into CREDS_PATH
+if [ -z "${TUNNEL_CREDS_B64:-}" ]; then
+  echo "ERROR: TUNNEL_CREDS_B64 env var is not set. Exiting."
+  exit 1
 fi
 
-# ===================================================
-# START: Export Cloudflare Tunnel credentials
-# ===================================================
-export TUNNEL_NAME="my-waha"
-export TUNNEL_CREDENTIALS="/etc/cloudflared/afdff7a5-08d4-44a2-9fc7-6355a8380355.json"
+echo "Writing credentials to $CREDS_PATH"
+echo "$TUNNEL_CREDS_B64" | base64 -d > "$CREDS_PATH"
+chmod 600 "$CREDS_PATH" || true
 
-# If Render container cannot use /etc/cloudflared, you can place your JSON in repo root and change path:
-# export TUNNEL_CREDENTIALS="./afdff7a5-08d4-44a2-9fc7-6355a8380355.json"
+# 2) Ensure cloudflared binary exists (download to local folder if missing)
+if [ ! -x "$CLOUDFLARED_BIN" ]; then
+  echo "Downloading cloudflared to $CLOUDFLARED_BIN ..."
+  wget -q -O "$CLOUDFLARED_BIN" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+  chmod +x "$CLOUDFLARED_BIN"
+fi
 
-# ===================================================
-# START: Run Cloudflare Tunnel in background
-# ===================================================
-echo "Starting Cloudflare Tunnel..."
-cloudflared tunnel --no-autoupdate --credentials-file $TUNNEL_CREDENTIALS run $TUNNEL_NAME &
+# 3) Start cloudflared tunnel in background (use full path to binary)
+echo "Starting cloudflared tunnel (using creds $CREDS_PATH) ..."
+"$CLOUDFLARED_BIN" tunnel --no-autoupdate --credentials-file "$CREDS_PATH" run "$TUNNEL_NAME" &
+CLOUDPID=$!
 
-# Wait a few seconds to ensure tunnel is up
+# Give cloudflared a few seconds to establish
 sleep 5
 
-# ===================================================
-# START: Run WAHA Python app
-# ===================================================
-echo "🎯 Starting WhatsApp Forwarder..."
-python3 render_app.py
+# Optional: check whether cloudflared actually started
+if ! ps -p $CLOUDPID > /dev/null 2>&1; then
+  echo "ERROR: cloudflared process died immediately. Check logs below for errors."
+  # print last 200 bytes of cloudflared log if it's making one (best-effort)
+  sleep 1
+fi
+
+# 4) Start your WAHA app (foreground)
+echo "Starting WAHA app..."
+exec $APP_CMD
