@@ -1,0 +1,162 @@
+python-3.11.0
+✅ ALL IMPROVEMENTS IMPLEMENTED:
+🔄 Rotating Hashtags:
+Platform-based (rotates between #AmazonDeals, #AmazonIndia, etc.)
+
+Time-based (changes every hour)
+
+Price/Category-based (based on product content)
+
+No more same hashtags everywhere!
+
+🔍 Enhanced Deduplication:
+ASIN tracking for Amazon
+
+Product ID tracking for Flipkart/Myntra/Ajio
+
+URL normalization + Text hash
+
+4-layer protection against duplicates
+
+🏷️ Amazon Affiliate:
+Always uses your tag (lootfastdeals-21)
+
+Removes any existing tags from URLs
+
+100% guaranteed your affiliate links
+
+⚡ All Flask Endpoints:
+/ - Enhanced dashboard
+
+/health - Health check with features
+
+/ping - Keep-alive
+
+/stats - Detailed statistics
+
+/test-whatsapp - Test message sending
+
+/waha-health - WAHA status
+
+/update-waha-url - Manual URL update
+
+🛡️ Safety Features:
+Daily/hourly limits
+
+Rate limiting
+
+Safe URL checking
+
+24/7 loop with auto-retry
+
+Deploy this script and enjoy the enhanced system! 🚀
+
+----------------------------------------------------
+New script-
+✅ FEATURES IMPLEMENTED:
+🕒 TIMING SETTINGS:
+🟢 FULL ACTIVITY: 7:00 AM to 1:00 AM (18 hours)
+
+🔵 REDUCED ACTIVITY: 1:00 AM to 7:00 AM (6 hours)
+
+24/7 Operation with optimized performance
+
+🏷️ HASHTAG SYSTEM:
+✅ Rotating hashtags (changes every few messages)
+
+✅ Platform-based: #AmazonDeals, #FlipkartSale, #MyntraDeals, #AjioOffers
+
+✅ Time-based: #MorningDeals, #AfternoonDeals, #EveningDeals, #LateNightDeals
+
+✅ Price-based: #Under500, #Under1000, #BudgetFriendly, #PremiumDeals
+
+✅ Category-based: #Electronics, #Fashion, #HomeDecor, #TechDeals
+
+🛡️ SPAM FILTERING:
+✅ Blocks "FAAAST" messages
+
+✅ Filters "Coupon None" without products
+
+✅ Removes empty/number-only messages
+
+✅ Requires valid URLs + product content
+
+🔍 DEDUPLICATION:
+✅ 4-layer protection: ASIN + Product ID + URL + Text hash
+
+✅ Amazon ASIN tracking
+
+✅ Flipkart/Myntra/Ajio product ID tracking
+
+✅ URL normalization + text hashing
+
+💰 PRICE DETECTION:
+✅ Better pattern matching for ₹ symbols
+
+✅ Handles "Price not shown" gracefully
+
+✅ Improved discount detection
+
+🌐 FLASK ENDPOINTS:
+✅ / - Enhanced dashboard with stats
+
+✅ /health - Health check with features list
+
+✅ /ping - Keep-alive to prevent sleep
+
+✅ /stats - Detailed statistics
+
+✅ /test-whatsapp - Test message sending
+
+✅ /waha-health - WAHA connection status
+
+⚡ PERFORMANCE:
+✅ Double message checking (12 messages per channel)
+
+✅ Faster intervals (25 seconds between checks)
+
+✅ Reduced delays (6 seconds between sends)
+
+✅ Auto-retry for WAHA connections
+
+✅ Safety limits (440 daily, 40 hourly messages)
+
+🛡️ SAFETY FEATURES:
+✅ Daily/hourly message limits
+
+✅ Rate limiting between sends
+
+✅ Safe URL validation
+
+✅ Amazon affiliate tag enforcement
+
+✅ Multi-platform support
+
+All features implemented and ready for 7AM-1AM operation! 🚀
+
+-------------------------------------------------
+new - up also add this for duplication and fast
+1. Enhanced ASIN Extraction
+Better pattern matching for Amazon URLs
+
+Handles different URL formats
+
+Extracts from amzn.to short links
+
+2. Product Name Tracking
+Extracts and normalizes product names
+
+Tracks similar product names across different URLs
+
+Prevents same product with different links
+
+3. 5-Layer Duplicate Detection:
+URL-based - Same cleaned URL
+
+ASIN-based - Same Amazon product ID
+
+Product ID-based - Same Flipkart/Myntra ID
+
+Product name-based - Similar product names
+
+Message hash - Same content
