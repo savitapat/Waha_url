@@ -1,16 +1,24 @@
-FROM python:3.11-slim
+FROM ubuntu:22.04
 
-WORKDIR /app
-COPY . /app
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# add cloudflared binary
-ADD https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 /usr/local/bin/cloudflared
-RUN chmod +x /usr/local/bin/cloudflared
+# Install Python requirements
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
 
-# make sure start.sh is executable
-RUN chmod +x /app/start.sh
+# Download WAHA
+RUN wget -O /usr/local/bin/waha https://github.com/devlikeapro/waha/releases/download/v5.0.0/waha-linux-x64-5.0.0
+RUN chmod +x /usr/local/bin/waha
 
-EXPOSE 5000
+# Copy your app
+COPY render_app.py .
+COPY start.sh .
 
-CMD ["/app/start.sh"]
+# Start both services
+CMD ["bash", "start.sh"]
